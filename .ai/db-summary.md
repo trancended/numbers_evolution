@@ -46,16 +46,19 @@ Poniżej znajduje się lista wszystkich kluczowych decyzji podjętych przez uży
 - ✅ Tylko `strategy_id` (FK) bez duplikacji nazwy czy snapshot
 - ✅ Soft delete strategii zapewni integralność historyczną
 
-#### 7. **Row Level Security (RLS)**
-- ✅ Włączenie RLS na tabelach: `strategies`, `simulations`, `events`
-- ✅ Policy izolująca dane per użytkownik: `user_id = current_setting('app.current_user_id')::uuid`
-- ❌ Bez RLS dla tabeli `draws` (dane publiczne)
+#### 7. **Izolacja danych (Application-level)**
+- ✅ **ZMIANA:** Scopowanie w Phoenix Contexts zamiast RLS
+- ✅ Każda funkcja contextu wymaga `%User{}` jako parametr
+- ✅ Automatyczne filtrowanie po `user_id` w queries
+- ✅ Testowalne, debugowalne, zgodne z Phoenix conventions
+- ❌ Bez RLS w PostgreSQL (niepotrzebne)
 
 #### 8. **Performance Score - Denormalizacja**
 - ✅ Przechowywanie `performance_score` (float, nullable) w tabeli `strategies`
-- ✅ Aktualizacja przez trigger PostgreSQL po INSERT/UPDATE/DELETE w `simulations`
-- ✅ Funkcja `recalculate_performance_score()` używająca `percentile_cont(0.5)` dla mediany
-- ✅ Przeliczanie tylko dla strategii której dotyczy zmiana (nie wszystkich)
+- ✅ **ZMIANA:** Obliczanie w kontekście `Strategies` (nie trigger PostgreSQL)
+- ✅ Wywoływane po każdej symulacji przez `update_strategy_performance_after_simulation/1`
+- ✅ Funkcja używa `percentile_cont(0.5)` dla mediany w Ecto query
+- ✅ Przeliczanie tylko dla strategii której dotyczy zmiana
 
 #### 9. **Tabela `events` dla analytics**
 - ✅ Struktura: `id`, `user_id`, `event_type`, `metadata` (JSONB), `inserted_at`
@@ -121,14 +124,13 @@ Poniżej znajdują się rekomendacje, które zostały zaakceptowane lub zmodyfik
 
 #### 1. **Akceptowane w pełni:**
 
-1. **Timestamps dla audytu** - Dodanie `inserted_at` i `updated_at` do wszystkich głównych tabel
+1. **Timestamps dla audytu** - `inserted_at` i `updated_at` zarządzane przez Ecto `timestamps()`
 2. **Indeksy dla simulations** - Wszystkie zaproponowane indeksy zostały zaakceptowane
-3. **Row Level Security** - Pełna implementacja dla izolacji danych użytkowników
-4. **Performance Score jako denormalizacja** - Trigger PostgreSQL z funkcją przeliczającą medianę
+3. **Izolacja danych** - Scopowanie w Phoenix Contexts (application-level)
+4. **Performance Score jako denormalizacja** - Obliczanie w kontekście po każdej symulacji
 5. **Struktura tabeli events** - JSONB metadata dla elastyczności
 6. **Constraints na simulations** - Wszystkie walidacje integralności danych
 7. **Unique constraints** - Zgodność z zaproponowanymi ograniczeniami unikalności
-8. **Funkcja recalculate_performance_score** - Implementacja zgodnie z rekomendacją
 
 #### 2. **Zmodyfikowane:**
 
@@ -146,6 +148,8 @@ Poniżej znajdują się rekomendacje, które zostały zaakceptowane lub zmodyfik
 17. **Strategy_snapshot** - Nie potrzebne dzięki soft delete
 18. **Source_strategy_ids** - Nie potrzebne dla mixów
 19. **Entity_type/entity_id kolumny** - Tylko metadata JSONB
+20. **Triggery PostgreSQL** - Logika przeniesiona do aplikacji (Phoenix best practice)
+21. **Row Level Security (RLS)** - Scopowanie w Contexts bardziej idiomatyczne dla Phoenix
 
 ---
 
@@ -411,49 +415,56 @@ Metryki do monitorowania:
 - Index usage (pg_stat_user_indexes)
 - Connection pool saturation
 
-#### Trigger: recalculate_performance_score
+#### Performance Score: Obliczanie w aplikacji (Phoenix/Ecto)
 
-**Implementacja funkcji:**
+**ZMIANA:** Zamiast triggera PostgreSQL, logika przeniesiona do kontekstu `Strategies`.
 
-```sql
-CREATE OR REPLACE FUNCTION recalculate_performance_score()
-RETURNS TRIGGER AS $$
-DECLARE
-  affected_strategy_id UUID;
-  new_score FLOAT;
-BEGIN
-  -- Określ którą strategię zaktualizować
-  affected_strategy_id := COALESCE(NEW.strategy_id, OLD.strategy_id);
-  
-  IF affected_strategy_id IS NOT NULL THEN
-    -- Oblicz medianę tylko dla successful simulations
-    SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY attempts_count)
-    INTO new_score
-    FROM simulations
-    WHERE strategy_id = affected_strategy_id 
-      AND status = 'success';
+**Implementacja w Elixir:**
+
+```elixir
+defmodule NumbersEvolution.Strategies do
+  import Ecto.Query
+  alias NumbersEvolution.Repo
+  alias NumbersEvolution.Strategies.Strategy
+  alias NumbersEvolution.Simulations.Simulation
+
+  @doc """
+  Przelicza performance_score dla strategii na podstawie mediany prób.
+  """
+  def recalculate_performance_score(strategy_id) do
+    # Oblicz medianę dla successful simulations
+    median_query = from s in Simulation,
+      where: s.strategy_id == ^strategy_id and s.status == :success,
+      select: fragment("percentile_cont(0.5) WITHIN GROUP (ORDER BY ?)", s.attempts_count)
     
-    -- Aktualizuj strategię
-    UPDATE strategies
-    SET performance_score = new_score,
-        updated_at = NOW()
-    WHERE id = affected_strategy_id;
-  END IF;
+    median = Repo.one(median_query)
+    
+    # Aktualizuj strategię (Ecto automatycznie zaktualizuje updated_at)
+    strategy = Repo.get!(Strategy, strategy_id)
+    strategy
+    |> Ecto.Changeset.change(performance_score: median)
+    |> Repo.update!()
+  end
   
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger
-CREATE TRIGGER update_strategy_performance
-AFTER INSERT OR UPDATE OR DELETE ON simulations
-FOR EACH ROW EXECUTE FUNCTION recalculate_performance_score();
+  @doc """
+  Wywoływane po zakończeniu każdej symulacji.
+  """
+  def update_strategy_performance_after_simulation(%Simulation{strategy_id: strategy_id}) 
+    when not is_nil(strategy_id) do
+    recalculate_performance_score(strategy_id)
+  end
+  def update_strategy_performance_after_simulation(_), do: :ok
+end
 ```
 
-**Optymalizacje:**
-- Przelicza tylko dla jednej strategii (nie wszystkich)
-- Używa mediany zamiast średniej (mniej wrażliwe na outliers)
-- Tylko successful simulations brane pod uwagę
+**Zalety tego podejścia:**
+- ✅ Testowalne w ExUnit
+- ✅ Debugowalne (breakpoints, IEx)
+- ✅ Widoczne w code review
+- ✅ Kontrola nad wykonaniem (może być async)
+- ✅ Zgodne z Phoenix conventions
+- ✅ Używa mediany (mniej wrażliwe na outliers)
+- ✅ Tylko successful simulations
 
 ---
 
@@ -618,14 +629,17 @@ strategies 1───N simulations
 draws 1───N simulations
 ```
 
-### Indexes (17):
+### Indexes (22):
 - 6 na `strategies`
 - 5 na `simulations`
 - 3 na `draws`
 - 3 na `events`
+- W tym 3 GIN (JSONB), 2 partial, 4 composite
 
-### Triggers (1):
-- `update_strategy_performance` - auto-update performance_score
+### Logika aplikacji:
+- **Timestamps** - zarządzane przez Ecto `timestamps()`
+- **Performance score** - obliczany w kontekście `Strategies`
+- **Izolacja danych** - scopowanie w Phoenix Contexts
 
 ### Constraints:
 - CHECK constraints dla statusów i validacji
@@ -633,9 +647,9 @@ draws 1───N simulations
 - UNIQUE constraints dla unikalności danych
 
 ### Security:
-- Row Level Security (RLS) na 3 tabelach
+- Scopowanie w Contexts (application-level)
 - Walidacja w Ecto/embedded schemas
-- Audit trail (timestamps)
+- Audit trail (timestamps automatyczne)
 
 ---
 
@@ -652,16 +666,19 @@ draws 1───N simulations
    - Stwórz `simulations` table
    - Stwórz `events` table
 4. ✅ **Indeksy:** Dodaj wszystkie zaplanowane indeksy
-5. ✅ **Funkcja i trigger:** `recalculate_performance_score()`
-6. ✅ **RLS policies:** Implementuj Row Level Security
-7. ✅ **Seed data:** 100-200 losowań + 15 template strategii
-8. ✅ **Embedded schemas:** Dla `rules`, `result`, `metadata`
+5. ✅ **Seed data:** 100-200 losowań + 15 template strategii
+6. ✅ **Embedded schemas:** Dla `rules`, `result`, `metadata`
+7. ✅ **Contexts:** 
+   - Implementuj scopowanie po `user_id` w każdej funkcji
+   - Dodaj `recalculate_performance_score/1` w `Strategies`
+   - Wywoływaj po każdej symulacji w `Simulations.complete_simulation/2`
 
 ### Testowanie:
 
-- Unit testy dla Ecto schemas
-- Integration testy dla RLS policies
-- Performance testy dla trigger (przy dużej liczbie symulacji)
+- Unit testy dla Ecto schemas i changesets
+- Integration testy dla scopowania w Contexts
+- Testy dla `recalculate_performance_score/1`
+- Testy izolacji danych (user A nie widzi danych user B)
 - Migracje backwards compatibility
 
 ### Monitoring:
@@ -669,4 +686,4 @@ draws 1───N simulations
 - Query performance (pg_stat_statements)
 - Table sizes (`pg_total_relation_size`)
 - Index usage (`pg_stat_user_indexes`)
-- RLS overhead
+- Context functions performance (Telemetry)

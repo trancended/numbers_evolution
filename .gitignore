@@ -38,3 +38,5 @@ npm-debug.log
 # Temporary files and archived documents
 /REMOVE/
 
+.env
+.vscode/

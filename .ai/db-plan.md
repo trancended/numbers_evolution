@@ -364,143 +364,204 @@ CREATE INDEX idx_events_metadata_gin ON events USING GIN(metadata);
 
 ---
 
-## 4. Trigger i funkcje
+## 4. Logika aplikacji (Phoenix/Ecto patterns)
 
-### 4.1 Trigger: update_updated_at_column
+**UWAGA:** W wersji pierwotnej tego dokumentu planowano użycie triggerów PostgreSQL dla `updated_at` i `performance_score`. Po analizie best practices Phoenix/Elixir, zdecydowano o **przeniesieniu całej logiki do kodu aplikacji**.
 
-Automatyczna aktualizacja pola `updated_at` przy każdej zmianie rekordu.
+### 4.1 Automatyczne timestamps (Ecto)
 
-```sql
--- Funkcja
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Triggery dla wszystkich tabel z updated_at
-CREATE TRIGGER update_users_updated_at 
-  BEFORE UPDATE ON users 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_strategies_updated_at 
-  BEFORE UPDATE ON strategies 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_draws_updated_at 
-  BEFORE UPDATE ON draws 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_simulations_updated_at 
-  BEFORE UPDATE ON simulations 
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-```
-
-### 4.2 Trigger: recalculate_performance_score
-
-Automatyczna aktualizacja `performance_score` w tabeli `strategies` po każdej zmianie w `simulations`.
-
-```sql
--- Funkcja
-CREATE OR REPLACE FUNCTION recalculate_performance_score()
-RETURNS TRIGGER AS $$
-DECLARE
-  affected_strategy_id UUID;
-  new_score FLOAT;
-BEGIN
-  -- Określ którą strategię zaktualizować
-  affected_strategy_id := COALESCE(NEW.strategy_id, OLD.strategy_id);
-  
-  IF affected_strategy_id IS NOT NULL THEN
-    -- Oblicz medianę tylko dla successful simulations
-    SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY attempts_count)
-    INTO new_score
-    FROM simulations
-    WHERE strategy_id = affected_strategy_id 
-      AND status = 'success';
-    
-    -- Aktualizuj strategię
-    UPDATE strategies
-    SET performance_score = new_score,
-        updated_at = NOW()
-    WHERE id = affected_strategy_id;
-  END IF;
-  
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger
-CREATE TRIGGER update_strategy_performance
-  AFTER INSERT OR UPDATE OR DELETE ON simulations
-  FOR EACH ROW 
-  EXECUTE FUNCTION recalculate_performance_score();
-```
-
-**Uwagi:**
-- Trigger przelicza performance_score tylko dla jednej strategii (nie wszystkich)
-- Używa mediany zamiast średniej (mniej wrażliwe na outliers)
-- Bierze pod uwagę tylko successful simulations
-- Automatyczna aktualizacja `updated_at`
-
----
-
-## 5. Row Level Security (RLS)
-
-### 5.1 Konfiguracja RLS dla izolacji danych użytkowników
-
-```sql
--- Enable RLS na tabelach z danymi użytkowników
-ALTER TABLE strategies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE simulations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-
--- Policy dla strategies
-CREATE POLICY strategies_isolation 
-  ON strategies
-  FOR ALL 
-  TO authenticated_user
-  USING (user_id = current_setting('app.current_user_id')::uuid);
-
--- Policy dla simulations
-CREATE POLICY simulations_isolation 
-  ON simulations
-  FOR ALL 
-  TO authenticated_user
-  USING (user_id = current_setting('app.current_user_id')::uuid);
-
--- Policy dla events
-CREATE POLICY events_isolation 
-  ON events
-  FOR ALL 
-  TO authenticated_user
-  USING (user_id = current_setting('app.current_user_id')::uuid);
-```
-
-### 5.2 Ustawienie w aplikacji (Ecto)
+Ecto automatycznie zarządza `inserted_at` i `updated_at` przez `timestamps()`:
 
 ```elixir
-# Przy każdej transakcji/query
-defmodule NumbersEvolution.Repo do
-  use Ecto.Repo,
-    otp_app: :numbers_evolution,
-    adapter: Ecto.Adapters.Postgres
+# W każdym schema:
+defmodule NumbersEvolution.Strategies.Strategy do
+  use Ecto.Schema
+  
+  schema "strategies" do
+    field :name, :string
+    field :type, :string
+    # ... inne pola
+    
+    timestamps(type: :utc_datetime)  # ← Automatyczne inserted_at i updated_at
+  end
+end
+```
 
-  def with_user_context(user_id, fun) do
-    transaction(fn ->
-      query!("SET LOCAL app.current_user_id = $1", [user_id])
-      fun.()
+**Jak to działa:**
+- `inserted_at` - ustawiane przy `Repo.insert/2`
+- `updated_at` - automatycznie aktualizowane przy `Repo.update/2`
+- Nie wymaga żadnych triggerów w bazie danych
+- Testowalne, debugowalne, widoczne w kodzie
+
+### 4.2 Przeliczanie performance_score (Context pattern)
+
+Performance score obliczany w kontekście `Strategies` po każdej symulacji:
+
+```elixir
+defmodule NumbersEvolution.Strategies do
+  import Ecto.Query
+  alias NumbersEvolution.Repo
+  alias NumbersEvolution.Strategies.Strategy
+  alias NumbersEvolution.Simulations.Simulation
+
+  @doc """
+  Przelicza performance_score dla strategii na podstawie mediany prób
+  ze wszystkich successful simulations.
+  """
+  def recalculate_performance_score(strategy_id) do
+    # Oblicz medianę
+    median_query = from s in Simulation,
+      where: s.strategy_id == ^strategy_id and s.status == :success,
+      select: fragment("percentile_cont(0.5) WITHIN GROUP (ORDER BY ?)", s.attempts_count)
+    
+    median = Repo.one(median_query)
+    
+    # Aktualizuj strategię
+    strategy = Repo.get!(Strategy, strategy_id)
+    strategy
+    |> Ecto.Changeset.change(performance_score: median)
+    |> Repo.update!()
+  end
+  
+  @doc """
+  Wywołaj po zakończeniu każdej symulacji.
+  """
+  def update_strategy_performance_after_simulation(%Simulation{strategy_id: strategy_id}) 
+    when not is_nil(strategy_id) do
+    recalculate_performance_score(strategy_id)
+  end
+  def update_strategy_performance_after_simulation(_), do: :ok
+end
+```
+
+**Użycie w Simulations context:**
+
+```elixir
+defmodule NumbersEvolution.Simulations do
+  alias NumbersEvolution.Strategies
+  
+  def complete_simulation(simulation, result) do
+    Repo.transaction(fn ->
+      # 1. Zapisz wynik symulacji
+      {:ok, sim} = simulation
+        |> Simulation.changeset(result)
+        |> Repo.update()
+      
+      # 2. Przelicz performance_score strategii
+      Strategies.update_strategy_performance_after_simulation(sim)
+      
+      sim
     end)
   end
 end
 ```
 
+**Zalety tego podejścia:**
+- ✅ Testowalne w ExUnit
+- ✅ Debugowalne z IEx
+- ✅ Widoczne w code review
+- ✅ Kontrola nad timing (np. async update)
+- ✅ Łatwe do optymalizacji (np. cache, batch updates)
+- ✅ Zgodne z Phoenix conventions
+
+---
+
+## 5. Izolacja danych użytkowników (Application-level scoping)
+
+**UWAGA:** Zamiast Row Level Security w PostgreSQL, używamy **scopowania na poziomie aplikacji** przez Phoenix Contexts. To bardziej idiomatyczne dla Phoenix i łatwiejsze do testowania.
+
+### 5.1 Scopowanie w Contexts
+
+Każdy context automatycznie filtruje dane po `user_id`:
+
+```elixir
+defmodule NumbersEvolution.Strategies do
+  import Ecto.Query
+  alias NumbersEvolution.Repo
+  alias NumbersEvolution.Strategies.Strategy
+
+  @doc """
+  Zwraca wszystkie strategie dla danego użytkownika.
+  """
+  def list_strategies(%User{id: user_id}) do
+    from(s in Strategy, where: s.user_id == ^user_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Pobiera strategię - tylko jeśli należy do użytkownika.
+  """
+  def get_strategy!(%User{id: user_id}, strategy_id) do
+    from(s in Strategy,
+      where: s.id == ^strategy_id and s.user_id == ^user_id
+    )
+    |> Repo.one!()
+  end
+
+  @doc """
+  Tworzy strategię dla użytkownika.
+  """
+  def create_strategy(%User{id: user_id}, attrs) do
+    %Strategy{user_id: user_id}
+    |> Strategy.changeset(attrs)
+    |> Repo.insert()
+  end
+end
+```
+
+### 5.2 Wymuszanie w LiveView
+
+```elixir
+defmodule NumbersEvolutionWeb.StrategyLive.Index do
+  use NumbersEvolutionWeb, :live_view
+  alias NumbersEvolution.Strategies
+
+  def mount(_params, _session, socket) do
+    current_user = socket.assigns.current_user
+    
+    # Automatyczne scopowanie po użytkowniku
+    strategies = Strategies.list_strategies(current_user)
+    
+    {:ok, assign(socket, strategies: strategies)}
+  end
+  
+  def handle_event("delete", %{"id" => id}, socket) do
+    current_user = socket.assigns.current_user
+    
+    # Pobiera TYLKO jeśli należy do current_user
+    # Rzuci Ecto.NoResultsError jeśli nie należy
+    strategy = Strategies.get_strategy!(current_user, id)
+    {:ok, _} = Strategies.delete_strategy(strategy)
+    
+    {:noreply, socket}
+  end
+end
+```
+
+### 5.3 Zabezpieczenie LiveView routes
+
+```elixir
+# lib/numbers_evolution_web/router.ex
+scope "/", NumbersEvolutionWeb do
+  pipe_through [:browser, :require_authenticated_user]
+  
+  live "/strategies", StrategyLive.Index, :index
+  live "/strategies/:id", StrategyLive.Show, :show
+  # ...
+end
+```
+
+**Zalety scopowania w aplikacji:**
+- ✅ Testowalne - łatwe mock'owanie użytkownika
+- ✅ Debugowalne - widzisz queries w logach
+- ✅ Elastic - różne poziomy dostępu per feature
+- ✅ Phoenix convention - zgodne z Context pattern
+- ✅ Brak dodatkowej konfiguracji DB
+
 **Uwagi:**
-- `draws` nie mają RLS - są danymi publicznymi
-- `users` nie mają RLS - dostęp kontrolowany przez auth layer
-- RLS zapewnia dodatkową warstwę security na poziomie bazy danych
+- `draws` są publiczne - nie wymagają scopowania
+- `users` - dostęp kontrolowany przez Phoenix auth
+- Scopowanie jest **obowiązkowe** w każdym context function
 
 ---
 
@@ -579,9 +640,11 @@ templates = [
 8. `20241114000008_create_indexes_draws.exs` - indeksy dla draws
 9. `20241114000009_create_indexes_simulations.exs` - indeksy dla simulations
 10. `20241114000010_create_indexes_events.exs` - indeksy dla events
-11. `20241114000011_create_trigger_updated_at.exs` - trigger dla updated_at
-12. `20241114000012_create_trigger_performance_score.exs` - trigger dla performance_score
-13. `20241114000013_enable_rls.exs` - włączenie Row Level Security
+
+**Uwagi:**
+- Brak migracji dla triggerów - logika przeniesiona do aplikacji (Phoenix best practice)
+- Brak migracji RLS - izolacja danych przez scopowanie w contexts
+- `updated_at` zarządzane automatycznie przez Ecto `timestamps()`
 
 ---
 
@@ -592,8 +655,8 @@ templates = [
 1. **Indeksy GIN dla JSONB** - szybkie queries po polach JSON
 2. **Partial indexes** - indeksowanie tylko aktywnych rekordów
 3. **Composite indexes** - dla często używanych kombinacji filtrów
-4. **Denormalizacja** - performance_score w strategies (zamiast każdorazowej agregacji)
-5. **Trigger-based updates** - automatyczne przeliczanie metryk
+4. **Denormalizacja** - performance_score w strategies (aktualizowany w kontekście po każdej symulacji)
+5. **Ecto timestamps** - automatyczne zarządzanie `updated_at` bez overhead'u triggerów
 
 ### 8.2 Przyszłe optymalizacje (post-MVP)
 
@@ -703,13 +766,15 @@ pg_restore -h <host> -U <user> -d numbers_evolution backup.dump
 - ✅ Foreign keys z odpowiednimi ON DELETE actions
 - ✅ CHECK constraints dla integralności danych
 - ✅ UNIQUE constraints dla unikalności
-- ✅ Row Level Security (RLS) dla izolacji danych
-- ✅ Haszowanie haseł (bcrypt) w aplikacji
+- ✅ Haszowanie haseł (bcrypt) przez phx.gen.auth
 - ✅ JSONB validation w Ecto (embedded schemas)
 
-### 10.2 Do implementacji w aplikacji
+### 10.2 Implementowane w aplikacji (Phoenix/Ecto)
 
-- ⚠️ Rate limiting dla AI requests
+- ✅ **Izolacja danych** - scopowanie w Contexts (każda funkcja wymaga `%User{}`)
+- ✅ **Timestamps** - automatyczne przez Ecto `timestamps()`
+- ✅ **Performance metrics** - obliczane w Contexts po symulacjach
+- ⚠️ Rate limiting dla AI requests (do implementacji)
 - ⚠️ Prompt validation (max length, sanitization)
 - ⚠️ Password strength validation
 - ⚠️ Email confirmation flow
@@ -837,9 +902,11 @@ end
 - **Tabele:** 5 (users, strategies, draws, simulations, events)
 - **Relacje:** 5 (foreign keys)
 - **Indeksy:** 22 (w tym 3 GIN, 2 partial, 4 composite)
-- **Triggery:** 6 (5 × updated_at + 1 × performance_score)
-- **RLS Policies:** 3 (strategies, simulations, events)
 - **Constraints:** 14 CHECK constraints
+- **Logika w aplikacji:**
+  - Timestamps zarządzane przez Ecto
+  - Performance score obliczany w Contexts
+  - Izolacja danych przez scopowanie w Contexts
 
 ### 13.2 Przestrzeń dyskowa (szacunki)
 
