@@ -12,19 +12,20 @@ defmodule NumbersEvolution.Repo.Migrations.CreateEvents do
     end
 
     create constraint(:events, :events_type_check,
-      check: """
-      event_type IN (
-        'strategy_created',
-        'strategy_updated',
-        'strategy_deleted',
-        'simulation_started',
-        'simulation_completed',
-        'coupons_generated',
-        'strategy_mix_created',
-        'ai_request',
-        'ai_success',
-        'ai_error'
-      )
-      """)
+             check: """
+             event_type IN (
+               'strategy_created',
+               'strategy_updated',
+               'strategy_deleted',
+               'simulation_started',
+               'simulation_completed',
+               'coupons_generated',
+               'strategy_mix_created',
+               'ai_request',
+               'ai_success',
+               'ai_error'
+             )
+             """
+           )
   end
 end

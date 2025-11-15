@@ -7,10 +7,10 @@ defmodule NumbersEvolution.Simulations.Simulation do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias NumbersEvolution.Simulations.SimulationResult
   alias NumbersEvolution.Accounts.User
-  alias NumbersEvolution.Strategies.Strategy
   alias NumbersEvolution.Draws.Draw
+  alias NumbersEvolution.Simulations.SimulationResult
+  alias NumbersEvolution.Strategies.Strategy
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),

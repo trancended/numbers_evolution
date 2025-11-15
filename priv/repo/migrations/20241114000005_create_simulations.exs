@@ -18,15 +18,15 @@ defmodule NumbersEvolution.Repo.Migrations.CreateSimulations do
     end
 
     create constraint(:simulations, :simulations_status_check,
-      check: "status IN ('pending', 'running', 'success', 'timeout', 'error', 'cancelled')")
+             check: "status IN ('pending', 'running', 'success', 'timeout', 'error', 'cancelled')"
+           )
 
-    create constraint(:simulations, :simulations_attempts_check,
-      check: "attempts_count >= 0")
+    create constraint(:simulations, :simulations_attempts_check, check: "attempts_count >= 0")
 
-    create constraint(:simulations, :simulations_duration_check,
-      check: "duration_seconds >= 0")
+    create constraint(:simulations, :simulations_duration_check, check: "duration_seconds >= 0")
 
     create constraint(:simulations, :simulations_completed_check,
-      check: "completed_at IS NULL OR completed_at >= started_at")
+             check: "completed_at IS NULL OR completed_at >= started_at"
+           )
   end
 end

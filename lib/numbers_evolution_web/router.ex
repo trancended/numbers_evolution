@@ -12,6 +12,13 @@ defmodule NumbersEvolutionWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :fetch_session
+  end
+
+  pipeline :api_auth do
+    plug :accepts, ["json"]
+    plug NumbersEvolutionWeb.Plugs.APIAuth
+    plug NumbersEvolutionWeb.Plugs.RateLimiter
   end
 
   scope "/", NumbersEvolutionWeb do
@@ -20,10 +27,50 @@ defmodule NumbersEvolutionWeb.Router do
     get "/", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", NumbersEvolutionWeb do
-  #   pipe_through :api
-  # end
+  # Public API routes
+  scope "/api", NumbersEvolutionWeb do
+    pipe_through :api
+
+    # Authentication
+    post "/users/register", UserController, :register
+    post "/auth/token", UserController, :create_token
+
+    # Public draws
+    get "/draws", DrawController, :index
+    get "/draws/latest", DrawController, :latest
+    get "/draws/analysis", DrawController, :analysis
+    get "/draws/:id", DrawController, :show
+  end
+
+  # Authenticated API routes
+  scope "/api", NumbersEvolutionWeb do
+    pipe_through :api_auth
+
+    # Users
+    get "/users/me", UserController, :show
+    patch "/users/me", UserController, :update
+    post "/users/me/password", UserController, :change_password
+
+    # Strategies
+    get "/strategies", StrategyController, :index
+    get "/strategies/:id", StrategyController, :show
+    post "/strategies", StrategyController, :create
+    patch "/strategies/:id", StrategyController, :update
+    delete "/strategies/:id", StrategyController, :delete
+
+    # Simulations
+    get "/simulations", SimulationController, :index
+    get "/simulations/:id", SimulationController, :show
+    post "/simulations", SimulationController, :create
+    get "/simulations/:id/progress", SimulationController, :progress
+
+    # Rankings
+    get "/rankings/strategies", RankingController, :strategies
+
+    # Coupons
+    post "/coupons/generate", CouponController, :generate
+    post "/coupons/generate/top", CouponController, :generate_from_top
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:numbers_evolution, :dev_routes) do

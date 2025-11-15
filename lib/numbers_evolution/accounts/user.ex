@@ -187,4 +187,15 @@ defmodule NumbersEvolution.Accounts.User do
         add_error(changeset, :preferences, "must be a valid map")
     end
   end
+
+  @doc """
+  Validates the current password.
+  """
+  def validate_current_password(changeset, password) do
+    if valid_password?(changeset.data, password) do
+      changeset
+    else
+      add_error(changeset, :current_password, "is not valid")
+    end
+  end
 end

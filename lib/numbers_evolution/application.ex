@@ -7,6 +7,9 @@ defmodule NumbersEvolution.Application do
 
   @impl true
   def start(_type, _args) do
+    # Initialize ETS table for rate limiting
+    NumbersEvolutionWeb.Plugs.RateLimiter.init_table()
+
     children = [
       NumbersEvolutionWeb.Telemetry,
       NumbersEvolution.Repo,

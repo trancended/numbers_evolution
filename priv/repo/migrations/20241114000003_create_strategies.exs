@@ -16,9 +16,11 @@ defmodule NumbersEvolution.Repo.Migrations.CreateStrategies do
     end
 
     create constraint(:strategies, :strategies_type_check,
-      check: "type IN ('manual', 'ai_generated')")
+             check: "type IN ('manual', 'ai_generated')"
+           )
 
     create constraint(:strategies, :strategies_status_check,
-      check: "status IN ('active', 'deleted', 'archived')")
+             check: "status IN ('active', 'deleted', 'archived')"
+           )
   end
 end

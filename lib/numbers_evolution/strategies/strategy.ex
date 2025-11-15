@@ -7,9 +7,9 @@ defmodule NumbersEvolution.Strategies.Strategy do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias NumbersEvolution.Strategies.StrategyRules
   alias NumbersEvolution.Accounts.User
   alias NumbersEvolution.Simulations.Simulation
+  alias NumbersEvolution.Strategies.StrategyRules
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t(),

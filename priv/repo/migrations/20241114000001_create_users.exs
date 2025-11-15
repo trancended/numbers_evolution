@@ -2,7 +2,9 @@ defmodule NumbersEvolution.Repo.Migrations.CreateUsers do
   use Ecto.Migration
 
   def change do
-    execute "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"", "DROP EXTENSION IF EXISTS \"uuid-ossp\""
+    execute "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"",
+            "DROP EXTENSION IF EXISTS \"uuid-ossp\""
+
     execute "CREATE EXTENSION IF NOT EXISTS \"citext\"", "DROP EXTENSION IF EXISTS \"citext\""
 
     create table(:users, primary_key: false) do

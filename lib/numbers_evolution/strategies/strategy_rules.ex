@@ -113,16 +113,20 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
     validate_change(changeset, field, fn ^field, ratio ->
       case ratio do
         [a, b] when is_integer(a) and is_integer(b) and a >= 0 and b >= 0 ->
-          if a + b == expected_sum do
-            []
-          else
-            [{field, "must sum to #{expected_sum}, got #{a + b}"}]
-          end
+          validate_ratio_sum_value(field, a, b, expected_sum)
 
         _ ->
           [{field, "must be a list of two non-negative integers"}]
       end
     end)
+  end
+
+  defp validate_ratio_sum_value(field, a, b, expected_sum) do
+    if a + b == expected_sum do
+      []
+    else
+      [{field, "must sum to #{expected_sum}, got #{a + b}"}]
+    end
   end
 
   defp validate_number_range(changeset, field, range) do
@@ -138,31 +142,39 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
   defp validate_weights_sum(changeset) do
     case changeset do
       %{valid?: true, changes: changes} ->
-        weights_map = Map.take(changes, [:hot, :cold, :random])
-
-        if map_size(weights_map) > 0 do
-          sum =
-            weights_map
-            |> Map.values()
-            |> Enum.sum()
-
-          tolerance = 0.001
-
-          if abs(sum - 1.0) < tolerance do
-            changeset
-          else
-            add_error(
-              changeset,
-              :weights,
-              "must sum to 1.0 (±0.001 tolerance), got #{Float.round(sum, 3)}"
-            )
-          end
-        else
-          changeset
-        end
+        validate_weights_sum_for_changes(changeset, changes)
 
       _ ->
         changeset
+    end
+  end
+
+  defp validate_weights_sum_for_changes(changeset, changes) do
+    weights_map = Map.take(changes, [:hot, :cold, :random])
+
+    if map_size(weights_map) > 0 do
+      check_weights_sum_value(changeset, weights_map)
+    else
+      changeset
+    end
+  end
+
+  defp check_weights_sum_value(changeset, weights_map) do
+    sum =
+      weights_map
+      |> Map.values()
+      |> Enum.sum()
+
+    tolerance = 0.001
+
+    if abs(sum - 1.0) < tolerance do
+      changeset
+    else
+      add_error(
+        changeset,
+        :weights,
+        "must sum to 1.0 (±0.001 tolerance), got #{Float.round(sum, 3)}"
+      )
     end
   end
 end
