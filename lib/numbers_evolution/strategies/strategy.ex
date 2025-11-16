@@ -18,10 +18,12 @@ defmodule NumbersEvolution.Strategies.Strategy do
           type: String.t(),
           status: String.t(),
           rules: StrategyRules.t(),
+          description: String.t() | nil,
           ai_prompt: String.t() | nil,
           performance_score: float() | nil,
           user: User.t() | Ecto.Association.NotLoaded.t(),
           simulations: [Simulation.t()] | Ecto.Association.NotLoaded.t(),
+          simulations_count: integer() | nil,
           inserted_at: DateTime.t(),
           updated_at: DateTime.t()
         }
@@ -36,8 +38,10 @@ defmodule NumbersEvolution.Strategies.Strategy do
     field :name, :string
     field :type, :string
     field :status, :string, default: "active"
+    field :description, :string
     field :ai_prompt, :string
     field :performance_score, :float
+    field :simulations_count, :integer, virtual: true
 
     embeds_one :rules, StrategyRules
 
@@ -52,9 +56,10 @@ defmodule NumbersEvolution.Strategies.Strategy do
   """
   def changeset(strategy, attrs) do
     strategy
-    |> cast(attrs, [:name, :type, :status, :ai_prompt, :performance_score])
+    |> cast(attrs, [:name, :type, :status, :description, :ai_prompt, :performance_score])
     |> validate_required([:name, :type])
     |> validate_length(:name, min: 3, max: 255)
+    |> validate_length(:description, max: 1000)
     |> validate_inclusion(:type, @valid_types)
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:ai_prompt, max: 500)

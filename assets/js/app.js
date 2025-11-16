@@ -26,10 +26,63 @@ import {hooks as colocatedHooks} from "phoenix-colocated/numbers_evolution"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+
+// Auto-hide flash messages hook
+const AutoHideFlash = {
+  mounted() {
+    const hideAfter = parseInt(this.el.dataset.hideAfter || "2000", 10)
+    
+    this.timer = setTimeout(() => {
+      // Add fade-out transition
+      this.el.style.transition = "opacity 0.3s ease-out, transform 0.3s ease-out"
+      this.el.style.opacity = "0"
+      this.el.style.transform = "translateY(-10px)"
+      
+      // Hide after transition completes and trigger clear-flash event
+      setTimeout(() => {
+        this.el.style.display = "none"
+        // Trigger the click event to clear flash (same as user clicking)
+        const clickEvent = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true
+        })
+        this.el.dispatchEvent(clickEvent)
+      }, 300)
+    }, hideAfter)
+  },
+  
+  destroyed() {
+    if (this.timer) {
+      clearTimeout(this.timer)
+    }
+  }
+}
+
+// Set textarea value hook
+const SetTextareaValue = {
+  mounted() {
+    const value = this.el.dataset.value
+    if (value) {
+      this.el.value = value
+    }
+  },
+  
+  updated() {
+    const value = this.el.dataset.value
+    if (value) {
+      this.el.value = value
+    }
+  }
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {
+    ...colocatedHooks,
+    AutoHideFlash: AutoHideFlash,
+    SetTextareaValue: SetTextareaValue
+  },
 })
 
 // Show progress bar on live navigation and form submits

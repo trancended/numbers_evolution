@@ -1,7 +1,8 @@
 # Analiza Tech Stack - Numbers Evolution
 
 **Data analizy:** 14 listopada 2025  
-**Wersja:** 1.0  
+**Data aktualizacji:** 15 listopada 2025 (dodano Tailwind CSS v4 + DaisyUI)  
+**Wersja:** 1.1  
 **Analyst:** AI Assistant
 
 ---
@@ -13,6 +14,7 @@ Projekt jest edukacyjną aplikacją webową do testowania strategii typowania li
 ### Proponowany tech stack:
 - Backend: Elixir/Phoenix Framework
 - Frontend: Phoenix LiveView (real-time SPA)
+- Styling: Tailwind CSS v4 + DaisyUI
 - Baza danych: PostgreSQL
 - AI Provider: OpenAI GPT-4 Turbo lub Claude 3.5 Sonnet
 - Deployment: Fly.io (post-MVP)
@@ -42,6 +44,15 @@ Projekt jest edukacyjną aplikacją webową do testowania strategii typowania li
 - Form handling z walidacją - praktycznie zero boilerplate
 - Perfect match dla wymagań: live tracking symulacji (F3), dashboard (F8)
 - **Szacunek:** 60% mniej kodu frontend vs React/Vue
+
+**Tailwind CSS v4 + DaisyUI - szybki styling** (⭐⭐⭐⭐⭐)
+- Tailwind v4: nowa składnia CSS-first (`@import "tailwindcss"`, `@source`, `@theme`)
+- Zero konfiguracji - wszystko w CSS, bez `tailwind.config.js`
+- DaisyUI: gotowe komponenty (buttons, cards, forms, modals) - zero custom CSS
+- Dwa motywy out-of-the-box (light/dark) z Phoenix/Elixir color inspiration
+- Heroicons v2.2.0: ikony jako klasy CSS (`hero-{icon-name}`)
+- **Szacunek:** 70% mniej czasu na styling vs custom CSS lub inne frameworki
+- **Szacunek:** Setup <15 minut (już skonfigurowane w projekcie)
 
 **PostgreSQL - zero friction** (⭐⭐⭐⭐⭐)
 - Ecto integration - seamless
@@ -106,6 +117,13 @@ Projekt jest edukacyjną aplikacją webową do testowania strategii typowania li
 - Phoenix Presence dla distributed tracking
 - PubSub dla real-time communication
 - **Benchmarki:** Phoenix LiveView obsługuje ~100k concurrent connections na commodity hardware
+
+**Tailwind CSS v4 + DaisyUI - skalowanie styling** (⭐⭐⭐⭐⭐)
+- Tailwind v4: CSS-first - zero runtime overhead, tylko compiled CSS
+- DaisyUI: Pure CSS components - zero JavaScript dependencies
+- Bundle size: minimalny (tylko używane klasy Tailwind)
+- **Performance:** Lepsze niż CSS-in-JS lub styled-components (zero runtime)
+- **Skalowanie:** Niezależne od liczby użytkowników (static assets)
 
 **PostgreSQL + JSONB** (⭐⭐⭐⭐)
 - JSONB indexed queries - wydajne
@@ -198,6 +216,8 @@ Claude 3.5 Sonnet pricing (Nov 2024):
 **Utrzymanie** (⭐⭐⭐⭐⭐)
 - Elixir/Phoenix: minimal maintenance
 - LiveView: brak oddzielnego frontend do update'owania
+- Tailwind CSS v4: CSS-first approach - łatwiejsze utrzymanie niż JS config
+- DaisyUI: stabilna biblioteka, rzadkie breaking changes
 - Dependencies: stable ecosystem
 - **Szacunek:** <2h/miesiąc post-launch
 
@@ -574,31 +594,64 @@ from s in Strategy,
 
 #### F8: SPA DASHBOARD
 
-**Obecny:** LiveView single page z show/hide sections
+**Obecny:** LiveView single page z show/hide sections + Tailwind CSS v4 + DaisyUI
 ```html
 <%= if @active_section == :strategies do %>
   <.strategies_section ... />
 <% end %>
 ```
-- Czas: 2-3 dni
+- Czas: 2-3 dni (z Tailwind/DaisyUI)
+
+**Styling stack:**
+- **Tailwind CSS v4:** Utility-first CSS z nową składnią CSS-first
+  - `@import "tailwindcss" source(none)` - główny import
+  - `@source` - automatyczne wykrywanie klas w HEEx templates
+  - `@theme` - konfiguracja bezpośrednio w CSS (bez JS config)
+  - Custom variants dla LiveView loading states (`phx-click-loading`, `phx-submit-loading`)
+- **DaisyUI:** Komponenty UI jako klasy Tailwind
+  - Gotowe: `btn`, `card`, `modal`, `dropdown`, `form-control`, `table`
+  - Dwa motywy: light (Phoenix-inspired) i dark (Elixir-inspired)
+  - Theme switching przez `data-theme` attribute
+- **Heroicons:** Ikony jako klasy CSS (`hero-x-mark`, `hero-check`, etc.)
+
+**Przykład użycia:**
+```heex
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">Strategie</h2>
+    <button class="btn btn-primary" phx-click="create_strategy">
+      <Heroicons.plus class="w-5 h-5" />
+      Nowa strategia
+    </button>
+  </div>
+</div>
+```
 
 **Alternatywy:**
 
-**React SPA + REST API:**
+**React SPA + REST API + Tailwind:**
 - Czas: 5-7 dni
 - **WIĘCEJ** pracy (separate frontend)
+- Tailwind setup podobny, ale brak DaisyUI (trzeba dodać ręcznie)
 
 **Server-rendered Multi-page App (NAJPROSTSZE):**
 - Klasyczne linki między stronami
 - Czas: 1-2 dni
 - **Cons:** Przeładowanie strony (requirement F8.1: "Brak przeładowania")
+- Tailwind/DaisyUI nadal przydatne dla styling
 
-**HTMX/Hotwire:**
+**HTMX/Hotwire + Tailwind:**
 - Partial updates bez full reload
 - Czas: 2-3 dni
 - **Similar** do LiveView
+- Tailwind/DaisyUI działa identycznie
 
-**Werdykt:** ✅ LiveView jest **równie proste** jak HTMX/Hotwire, prostsze niż React SPA.
+**Werdykt:** ✅ LiveView + Tailwind v4 + DaisyUI jest **najprostsze** dla real-time SPA. Kombinacja daje:
+- Zero JavaScript framework complexity
+- Gotowe komponenty UI (DaisyUI)
+- Utility-first styling (Tailwind)
+- Real-time updates (LiveView)
+- **Total:** 2-3 dni na pełny dashboard vs 5-7 dni z React
 
 ### 🎯 SYNTEZA: NAJPROSTSZE PODEJŚCIE
 
@@ -922,6 +975,8 @@ end
 - ✅ CSRF tokens - automatic
 - ✅ Data isolation patterns - enforced przez contexts
 - ✅ Fly.io - HTTPS, managed security
+- ✅ Tailwind CSS v4 - CSS-first approach, zero JS config complexity
+- ✅ DaisyUI - gotowe komponenty, mniej custom CSS = mniej surface area dla XSS
 
 **Co wymaga poprawy:**
 
@@ -1082,15 +1137,24 @@ end
    - Wymagań projektu (real-time, concurrency)
    - Portfolio value
 
-2. **PostgreSQL** - standard, nie ma powodu zmieniać
+2. **Tailwind CSS v4 + DaisyUI** - excellent choice dla styling:
+   - **Tailwind v4:** Nowa składnia CSS-first - zero JS config, wszystko w CSS
+   - **DaisyUI:** Gotowe komponenty UI - oszczędność czasu na styling
+   - **Heroicons:** Ikony jako klasy CSS - zero dodatkowych dependencies
+   - **Motywy:** Light/dark out-of-the-box z Phoenix/Elixir inspiration
+   - **LiveView integration:** Custom variants dla loading states
+   - **Szacunek:** 70% oszczędności czasu na styling vs custom CSS
+   - **Setup:** Już skonfigurowane w projekcie (<15 min)
 
-3. **Phoenix phx.gen.auth** - wystarczające dla MVP1
+3. **PostgreSQL** - standard, nie ma powodu zmieniać
 
-4. **Fly.io** - dobry wybór dla post-MVP deployment
+4. **Phoenix phx.gen.auth** - wystarczające dla MVP1
+
+5. **Fly.io** - dobry wybór dla post-MVP deployment
 
 #### ⚠️ PRZEMYŚL / ZMODYFIKUJ:
 
-5. **AI Provider** - największy concern:
+6. **AI Provider** - największy concern:
 
 **REKOMENDACJA: Hybrid approach**
 ```
@@ -1132,7 +1196,11 @@ Benefits:
 - [ ] Model danych (draws, strategies, simulations)
 - [ ] Seed 100-200 draws
 - [ ] Seed 15 template strategies
-- [ ] Basic layout
+- [ ] Basic layout z Tailwind CSS v4 + DaisyUI
+  - [ ] Layout component z DaisyUI `drawer`/`navbar`
+  - [ ] Theme switcher (light/dark)
+  - [ ] Responsive design z Tailwind breakpoints
+  - [ ] DaisyUI komponenty: cards, buttons, forms
 
 **Week 3: (Strategie CRUD):**
 - [ ] Lista strategii
@@ -1185,8 +1253,12 @@ Benefits:
 1. 🔴 **De-risk AI:** templates jako core, AI jako optional/enhancement
 2. 🟡 **Dodaj basic security:** password validation + rate limiting (4h pracy)
 3. ✅ **Zostań przy Elixir/Phoenix/LiveView:** to właściwy stack dla Ciebie
-4. 🟡 **Wybierz Claude 3.5 Sonnet:** jeśli robisz AI (2.5x tańszy niż GPT-4)
-5. ⚠️ **Spike AI early:** week 0-1, nie czekaj do week 4
+4. ✅ **Tailwind CSS v4 + DaisyUI:** excellent choice - już skonfigurowane, oszczędza czas
+   - Wykorzystaj DaisyUI komponenty zamiast custom CSS
+   - Użyj Tailwind utilities dla szybkiego styling
+   - Theme switching (light/dark) już gotowe
+5. 🟡 **Wybierz Claude 3.5 Sonnet:** jeśli robisz AI (2.5x tańszy niż GPT-4)
+6. ⚠️ **Spike AI early:** week 0-1, nie czekaj do week 4
 
 **Ten stack pozwoli Ci:**
 - ✅ Dostarczyć working MVP w 6 tygodni
@@ -1279,7 +1351,10 @@ Cons:
 ### KTÓRE WYBRAĆ?
 
 **Dla Twojego profilu (senior Elixir, rozwój umiejętności):**
-1. ✅ **Elixir/Phoenix/LiveView** (zaproponowany) - BEST FIT
+1. ✅ **Elixir/Phoenix/LiveView + Tailwind CSS v4 + DaisyUI** (zaproponowany) - BEST FIT
+   - LiveView dla real-time
+   - Tailwind v4 dla szybkiego styling (CSS-first approach)
+   - DaisyUI dla gotowych komponentów (zero custom CSS)
 2. Modern JS (jeśli chcesz pivotować do TS)
 3. Rails (jeśli znasz Ruby, chcesz fastest MVP)
 4. Python (jeśli chcesz więcej data science angle)
@@ -1287,6 +1362,7 @@ Cons:
 ---
 
 **Dokument przygotowany:** 14 listopada 2025  
+**Ostatnia aktualizacja:** 15 listopada 2025 (dodano Tailwind CSS v4 + DaisyUI)  
 **Do review przez:** Deweloper projektu Numbers Evolution  
 **Następne kroki:** Decyzja re: AI strategy (Opcja A/B/C) + kick-off week 0
 

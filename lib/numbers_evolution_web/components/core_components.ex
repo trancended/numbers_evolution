@@ -55,6 +55,8 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-hook="AutoHideFlash"
+      data-hide-after="2000"
       role="alert"
       class="toast toast-top toast-end z-50"
       {@rest}
@@ -468,5 +470,353 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   """
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
+  end
+
+  ## Custom DaisyUI Components for Numbers Evolution
+
+  @doc """
+  Renders a modal dialog using DaisyUI.
+
+  ## Examples
+
+      <.modal id="confirm-modal" show={@show_modal}>
+        <:title>Confirm Action</:title>
+        <p>Are you sure?</p>
+        <:actions>
+          <.button phx-click="cancel">Cancel</.button>
+          <.button phx-click="confirm" variant="primary">Confirm</.button>
+        </:actions>
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :show, :boolean, default: false
+  attr :on_cancel, :any, default: nil
+
+  slot :title
+  slot :inner_block, required: true
+  slot :actions
+
+  def modal(assigns) do
+    ~H"""
+    <dialog id={@id} class={["modal", @show && "modal-open"]} phx-remove={hide_modal(@id)}>
+      <div class="modal-box max-w-2xl">
+        <h3 :if={@title != []} class="font-bold text-lg mb-4">
+          {render_slot(@title)}
+        </h3>
+        <div class="py-4">
+          {render_slot(@inner_block)}
+        </div>
+        <div :if={@actions != []} class="modal-action">
+          {render_slot(@actions)}
+        </div>
+        <form method="dialog" class="absolute right-4 top-4">
+          <button
+            type="button"
+            phx-click={@on_cancel || hide_modal(@id)}
+            class="btn btn-sm btn-circle btn-ghost"
+            aria-label={gettext("close")}
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button
+          type="button"
+          phx-click={@on_cancel || hide_modal(@id)}
+          aria-label={gettext("close")}
+        >
+          close
+        </button>
+      </form>
+    </dialog>
+    """
+  end
+
+  defp hide_modal(js \\ %JS{}, id) do
+    js
+    |> JS.hide(to: "##{id}", transition: "fade-out")
+    |> JS.remove_class("modal-open", to: "##{id}")
+  end
+
+  @doc """
+  Renders a badge using DaisyUI.
+
+  ## Examples
+
+      <.badge>Default</.badge>
+      <.badge variant="primary">Primary</.badge>
+      <.badge variant="success">Success</.badge>
+  """
+  attr :variant, :string,
+    default: "neutral",
+    values: ~w(neutral primary secondary accent success warning error info)
+
+  attr :size, :string, default: "md", values: ~w(xs sm md lg)
+  attr :class, :string, default: nil
+  slot :inner_block, required: true
+
+  def badge(assigns) do
+    ~H"""
+    <span class={[
+      "badge",
+      "badge-#{@variant}",
+      @size != "md" && "badge-#{@size}",
+      @class
+    ]}>
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
+  @doc """
+  Renders a number ball for lottery numbers.
+
+  ## Examples
+
+      <.ball number={7} type="main" />
+      <.ball number={3} type="euro" />
+  """
+  attr :number, :integer, required: true
+  attr :type, :string, default: "main", values: ~w(main euro)
+  attr :size, :string, default: "md", values: ~w(sm md lg)
+
+  def ball(assigns) do
+    size_classes = %{
+      "sm" => "w-10 h-10 text-base",
+      "md" => "w-12 h-12 text-lg",
+      "lg" => "w-16 h-16 text-2xl"
+    }
+
+    color_classes = %{
+      "main" => "bg-primary text-primary-content",
+      "euro" => "bg-warning text-warning-content"
+    }
+
+    assigns =
+      assigns
+      |> assign(:size_class, Map.get(size_classes, assigns.size))
+      |> assign(:color_class, Map.get(color_classes, assigns.type))
+
+    ~H"""
+    <div
+      class={[
+        "rounded-full flex items-center justify-center font-bold shadow-lg",
+        @size_class,
+        @color_class
+      ]}
+      aria-label={"#{if @type == "main", do: "Główna", else: "Euro"} liczba #{@number}"}
+    >
+      {@number}
+    </div>
+    """
+  end
+
+  @doc """
+  Renders an alert using DaisyUI.
+
+  ## Examples
+
+      <.alert kind="info">This is an info message</.alert>
+      <.alert kind="error">Something went wrong</.alert>
+  """
+  attr :kind, :string,
+    default: "info",
+    values: ~w(info success warning error)
+
+  attr :title, :string, default: nil
+  attr :dismissible, :boolean, default: false
+  attr :on_dismiss, :any, default: nil
+  attr :class, :string, default: nil
+  slot :inner_block, required: true
+
+  def alert(assigns) do
+    ~H"""
+    <div class={["alert", "alert-#{@kind}", @class]} role="alert">
+      <.icon
+        :if={@kind == "info"}
+        name="hero-information-circle"
+        class="size-5 shrink-0"
+      />
+      <.icon
+        :if={@kind == "success"}
+        name="hero-check-circle"
+        class="size-5 shrink-0"
+      />
+      <.icon
+        :if={@kind == "warning"}
+        name="hero-exclamation-triangle"
+        class="size-5 shrink-0"
+      />
+      <.icon
+        :if={@kind == "error"}
+        name="hero-exclamation-circle"
+        class="size-5 shrink-0"
+      />
+      <div class="flex-1">
+        <h3 :if={@title} class="font-bold">{@title}</h3>
+        <div>{render_slot(@inner_block)}</div>
+      </div>
+      <button
+        :if={@dismissible}
+        type="button"
+        phx-click={@on_dismiss}
+        class="btn btn-sm btn-ghost btn-circle"
+        aria-label={gettext("close")}
+      >
+        <.icon name="hero-x-mark" class="size-4" />
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a loading spinner using DaisyUI.
+
+  ## Examples
+
+      <.loading />
+      <.loading size="lg" />
+      <.loading text="Loading..." />
+  """
+  attr :size, :string, default: "md", values: ~w(xs sm md lg)
+  attr :text, :string, default: nil
+  attr :variant, :string, default: "spinner", values: ~w(spinner dots ring ball bars infinity)
+
+  def loading(assigns) do
+    ~H"""
+    <div class="flex flex-col items-center justify-center gap-4">
+      <span class={["loading", "loading-#{@variant}", "loading-#{@size}"]} />
+      <p :if={@text} class="text-sm text-base-content/70">{@text}</p>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders an empty state placeholder.
+
+  ## Examples
+
+      <.empty_state icon="hero-inbox">
+        <:title>No items yet</:title>
+        <:description>Create your first item to get started</:description>
+        <:action>
+          <.button>Create Item</.button>
+        </:action>
+      </.empty_state>
+  """
+  attr :icon, :string, required: true
+
+  slot :title, required: true
+  slot :description
+  slot :action
+
+  def empty_state(assigns) do
+    ~H"""
+    <div class="text-center py-16">
+      <.icon name={@icon} class="size-20 mx-auto mb-4 opacity-30" />
+      <h2 :if={@title != []} class="text-2xl font-semibold mb-2">
+        {render_slot(@title)}
+      </h2>
+      <p :if={@description != []} class="mb-6 text-base-content/70">
+        {render_slot(@description)}
+      </p>
+      <div :if={@action != []} class="flex gap-4 justify-center">
+        {render_slot(@action)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a status indicator with icon and text.
+
+  ## Examples
+
+      <.status_indicator status="running" />
+      <.status_indicator status="success" />
+  """
+  attr :status, :string,
+    required: true,
+    values: ~w(pending running success timeout error)
+
+  def status_indicator(assigns) do
+    config = %{
+      "pending" => %{
+        icon: "hero-clock",
+        text: "Oczekuje",
+        class: "text-base-content/50"
+      },
+      "running" => %{
+        icon: "hero-arrow-path",
+        text: "Trwa...",
+        class: "text-warning",
+        animate: true
+      },
+      "success" => %{
+        icon: "hero-check-circle",
+        text: "Sukces",
+        class: "text-success"
+      },
+      "timeout" => %{
+        icon: "hero-clock",
+        text: "Timeout",
+        class: "text-warning"
+      },
+      "error" => %{
+        icon: "hero-x-circle",
+        text: "Błąd",
+        class: "text-error"
+      }
+    }
+
+    status_config = Map.get(config, assigns.status)
+    assigns = assign(assigns, :config, status_config)
+
+    ~H"""
+    <div class={["flex items-center gap-2", @config.class]}>
+      <.icon
+        name={@config.icon}
+        class={"size-5 #{if @config[:animate], do: "motion-safe:animate-spin", else: ""}"}
+      />
+      <span class="font-medium">{@config.text}</span>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a card component using DaisyUI.
+
+  ## Examples
+
+      <.card>
+        <:title>Card Title</:title>
+        <p>Card content</p>
+        <:actions>
+          <.button>Action</.button>
+        </:actions>
+      </.card>
+  """
+  attr :class, :string, default: nil
+  attr :compact, :boolean, default: false
+
+  slot :title
+  slot :inner_block, required: true
+  slot :actions
+
+  def card(assigns) do
+    ~H"""
+    <div class={["card bg-base-100 shadow-xl", @class]}>
+      <div class={["card-body", @compact && "p-4"]}>
+        <h2 :if={@title != []} class="card-title">
+          {render_slot(@title)}
+        </h2>
+        {render_slot(@inner_block)}
+        <div :if={@actions != []} class="card-actions justify-end mt-4">
+          {render_slot(@actions)}
+        </div>
+      </div>
+    </div>
+    """
   end
 end

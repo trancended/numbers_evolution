@@ -123,6 +123,52 @@ defmodule NumbersEvolution.Strategies do
     end
   end
 
+  @doc """
+  Creates an AI-generated strategy for a user based on a text prompt.
+
+  ## Examples
+
+      iex> create_ai_strategy(user, "Pomin połowę liczb (wszystkie parzyste)")
+      {:ok, %Strategy{}}
+
+      iex> create_ai_strategy(user, "too short")
+      {:error, :invalid_prompt}
+
+  """
+  @spec create_ai_strategy(User.t(), String.t()) ::
+          {:ok, Strategy.t()} | {:error, atom() | Ecto.Changeset.t()}
+  def create_ai_strategy(user, prompt) when is_binary(prompt) do
+    # Validate prompt length
+    cond do
+      String.length(prompt) < 10 ->
+        {:error, :prompt_too_short}
+
+      String.length(prompt) > 500 ->
+        {:error, :prompt_too_long}
+
+      true ->
+        generate_and_create_strategy(user, prompt)
+    end
+  end
+
+  defp generate_and_create_strategy(user, prompt) do
+    case NumbersEvolution.AIProvider.generate_strategy(prompt) do
+      {:ok, ai_response} ->
+        attrs = %{
+          name: ai_response.strategy_name,
+          description: ai_response.description,
+          type: "ai_generated",
+          ai_prompt: prompt,
+          rules: ai_response.rules
+        }
+
+        create_strategy(user, attrs)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   ## Updates
 
   @doc """
@@ -145,7 +191,7 @@ defmodule NumbersEvolution.Strategies do
     strategy = get_strategy!(user, id)
 
     # Check if trying to modify rules of AI-generated strategy
-    if strategy.type == :ai_generated && Map.has_key?(attrs, "rules") do
+    if strategy.type == "ai_generated" && Map.has_key?(attrs, "rules") do
       {:error, :forbidden}
     else
       strategy

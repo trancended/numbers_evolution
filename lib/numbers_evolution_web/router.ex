@@ -5,6 +5,7 @@ defmodule NumbersEvolutionWeb.Router do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :fetch_live_flash
+    plug NumbersEvolutionWeb.Plugs.SaveSession
     plug :put_root_layout, html: {NumbersEvolutionWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
@@ -24,7 +25,7 @@ defmodule NumbersEvolutionWeb.Router do
   scope "/", NumbersEvolutionWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", PageLive, :index
   end
 
   # Public API routes

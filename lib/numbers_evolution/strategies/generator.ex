@@ -21,7 +21,9 @@ defmodule NumbersEvolution.Strategies.Generator do
   - Euro numbers are exactly 2 unique numbers in range 1-12
   - All constraints (even/odd, low/high ratios) are satisfied
   """
-  @spec generate_numbers(Strategy.t()) :: {:ok, %{main: [pos_integer()], euro: [pos_integer()]}}
+  @spec generate_numbers(Strategy.t()) ::
+          {:ok, %{main: [pos_integer()], euro: [pos_integer()]}}
+          | {:error, atom()}
   def generate_numbers(%Strategy{rules: rules}) do
     main_numbers = generate_main_numbers(rules.main_numbers)
     euro_numbers = generate_euro_numbers(rules.euro_numbers)

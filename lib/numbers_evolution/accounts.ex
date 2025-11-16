@@ -159,6 +159,7 @@ defmodule NumbersEvolution.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
+  @dialyzer {:nowarn_function, change_user_password: 3}
   @spec change_user_password(User.t(), String.t(), map()) ::
           {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def change_user_password(user, current_password, attrs) do
@@ -168,7 +169,12 @@ defmodule NumbersEvolution.Accounts do
       |> User.validate_current_password(current_password)
 
     Ecto.Multi.new()
-    |> Ecto.Multi.update(:user, changeset)
+    |> Ecto.Multi.run(:user, fn _repo, _changes ->
+      case Repo.update(changeset) do
+        {:ok, user} -> {:ok, user}
+        {:error, changeset} -> {:error, changeset}
+      end
+    end)
     |> Ecto.Multi.delete_all(:tokens, UserToken.by_user_query(user))
     |> Repo.transaction()
     |> case do
