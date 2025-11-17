@@ -388,6 +388,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   attr :strategies, :list, required: true
   attr :simulations, :list, required: true
   attr :draws, :list, required: true
+  attr :live_attempts, :map, default: %{}
+  attr :strategy_pools, :map, default: %{}
 
   def simulations_section(assigns) do
     ~H"""
@@ -426,7 +428,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </:description>
           </.empty_state>
         <% else %>
-          <.simulations_table simulations={@simulations} />
+          <.simulations_table
+            simulations={@simulations}
+            live_attempts={@live_attempts}
+            strategy_pools={@strategy_pools}
+          />
         <% end %>
       </.card>
     </div>
@@ -517,6 +523,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   end
 
   attr :simulations, :list, required: true
+  attr :live_attempts, :map, default: %{}
+  attr :strategy_pools, :map, default: %{}
 
   defp simulations_table(assigns) do
     ~H"""
@@ -525,7 +533,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <thead>
           <tr>
             <th>Strategia</th>
+            <th>Szczegóły strategii</th>
             <th>Target Draw</th>
+            <th>Poszukiwane liczby</th>
             <th>Data utworzenia</th>
             <th>Liczba prób</th>
             <th>Status</th>
@@ -535,25 +545,118 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <tbody>
           <%= for sim <- @simulations do %>
             <tr>
-              <td class="font-medium">{sim.strategy_id}</td>
-              <td>
-                {if sim.target_draw_id,
-                  do: Calendar.strftime(sim.inserted_at, "%Y-%m-%d"),
+              <td class="font-medium">
+                {if Ecto.assoc_loaded?(sim.strategy) && sim.strategy,
+                  do: sim.strategy.name,
                   else: "—"}
+              </td>
+              <td>
+                <%= if @strategy_pools && Map.has_key?(@strategy_pools, sim.id) do %>
+                  {pools = Map.get(@strategy_pools, sim.id)
+                   render_strategy_pools(pools)}
+                <% else %>
+                  <span>—</span>
+                <% end %>
+              </td>
+              <td>
+                {if Ecto.assoc_loaded?(sim.target_draw) && sim.target_draw,
+                  do: Calendar.strftime(sim.target_draw.draw_date, "%Y-%m-%d"),
+                  else: "—"}
+              </td>
+              <td>
+                <%= if Ecto.assoc_loaded?(sim.target_draw) && sim.target_draw do
+                  main = Enum.join(sim.target_draw.numbers.main_numbers, ", ")
+                  euro = Enum.join(sim.target_draw.numbers.euro_numbers, ", ")
+                  "<div class=\"text-xs\"><div>main: #{main}</div><div>euro: #{euro}</div></div>"
+                else
+                  "<span>—</span>"
+                end |> Phoenix.HTML.raw() %>
               </td>
               <td>{Calendar.strftime(sim.inserted_at, "%Y-%m-%d %H:%M")}</td>
               <td>
-                {if sim.result && sim.result["attempts_count"],
-                  do: format_number(sim.result["attempts_count"]),
-                  else: "—"}
+                <%= cond do
+                  sim.status == "running" && @live_attempts ->
+                    sim_id_string = to_string(sim.id)
+                    if Map.has_key?(@live_attempts, sim_id_string) do
+                      attempts = Map.get(@live_attempts, sim_id_string)
+                      "<span class=\"font-mono\">#{format_number(attempts)}</span>"
+                    else
+                      if sim.attempts_count && sim.attempts_count > 0 do
+                        "<span>#{format_number(sim.attempts_count)}</span>"
+                      else
+                        "<span>—</span>"
+                      end
+                    end
+                  sim.attempts_count && sim.attempts_count > 0 ->
+                    "<span>#{format_number(sim.attempts_count)}</span>"
+                  true ->
+                    "<span>—</span>"
+                end |> Phoenix.HTML.raw() %>
               </td>
               <td>
-                <.status_indicator status={sim.status} />
+                <div class="flex flex-col gap-1">
+                  <.status_indicator status={sim.status} />
+                  <%= if sim.status == "error" && sim.result && sim.result.error_message do %>
+                    <div class="text-xs text-error mt-1 max-w-xs truncate" title={sim.result.error_message}>
+                      {sim.result.error_message}
+                    </div>
+                  <% end %>
+                </div>
               </td>
               <td>
-                <button class="btn btn-sm btn-ghost">
-                  <.icon name="hero-eye" class="size-4" /> Szczegóły
-                </button>
+                <div class="flex gap-2 flex-wrap items-center">
+                  <%= if sim.status == "max_attempts_reached" do %>
+                    <button
+                      phx-click="show_update_max_attempts"
+                      phx-value-id={sim.id}
+                      class="btn btn-sm btn-warning"
+                      title="Zmień limit prób"
+                    >
+                      <.icon name="hero-cog-6-tooth" class="size-4" /> {"Zmień limit prób"}
+                    </button>
+                  <% end %>
+                  <%= if sim.status == "timeout" do %>
+                    <button
+                      phx-click="show_update_timeout"
+                      phx-value-id={sim.id}
+                      class="btn btn-sm btn-warning"
+                      title="Zmień timeout"
+                    >
+                      <.icon name="hero-cog-6-tooth" class="size-4" /> {"Zmień timeout"}
+                    </button>
+                  <% end %>
+                  <button
+                    phx-click="toggle_favorite"
+                    phx-value-id={sim.id}
+                    class={[
+                      "btn btn-sm",
+                      if(sim.is_favorite, do: "btn-warning", else: "btn-ghost")
+                    ]}
+                    title={if sim.is_favorite, do: "Odznacz jako ulubioną", else: "Oznacz jako ulubioną"}
+                  >
+                    <.icon name={if sim.is_favorite, do: "hero-star-solid", else: "hero-star"} class="size-4" />
+                    <%= if sim.is_favorite, do: "Oznaczona", else: "Oznacz" %>
+                  </button>
+                  <%= if sim.status in ["error", "timeout", "max_attempts_reached", "success", "cancelled"] do %>
+                    <button
+                      phx-click="retry_simulation"
+                      phx-value-id={sim.id}
+                      class="btn btn-sm btn-primary"
+                      title="Ponów symulację"
+                    >
+                      <.icon name="hero-arrow-path" class="size-4" /> {"Ponów"}
+                    </button>
+                  <% end %>
+                  <button
+                    phx-click="delete_simulation"
+                    phx-value-id={sim.id}
+                    class="btn btn-sm btn-error"
+                    title="Usuń symulację"
+                    data-confirm="Czy na pewno chcesz usunąć tę symulację?"
+                  >
+                    <.icon name="hero-trash" class="size-4" /> {"Usuń"}
+                  </button>
+                </div>
               </td>
             </tr>
           <% end %>
@@ -871,6 +974,38 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </div>
           </.card>
         <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_strategy_pools(pools) do
+    main_pools = pools.main_numbers
+    euro_pools = pools.euro_numbers
+
+    assigns = %{main_pools: main_pools, euro_pools: euro_pools}
+
+    ~H"""
+    <div class="text-xs space-y-1 max-w-xs">
+      <div>
+        <span class="font-semibold text-error">Hot:</span>
+        <span class="ml-1">{Enum.join(Enum.sort(@main_pools.hot), ", ")}</span>
+      </div>
+      <div>
+        <span class="font-semibold text-info">Cold:</span>
+        <span class="ml-1">{Enum.join(Enum.sort(@main_pools.cold), ", ")}</span>
+      </div>
+      <div>
+        <span class="font-semibold text-base-content/60">Random:</span>
+        <span class="ml-1">{length(@main_pools.random)} liczb</span>
+      </div>
+      <div class="pt-1 border-t border-base-300">
+        <span class="font-semibold">Euro Hot:</span>
+        <span class="ml-1">{Enum.join(Enum.sort(@euro_pools.hot), ", ")}</span>
+      </div>
+      <div>
+        <span class="font-semibold text-base-content/60">Euro Random:</span>
+        <span class="ml-1">{length(@euro_pools.random)} liczb</span>
       </div>
     </div>
     """

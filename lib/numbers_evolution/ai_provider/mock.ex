@@ -13,12 +13,13 @@ defmodule NumbersEvolution.AIProvider.Mock do
     normalized_prompt = String.downcase(prompt)
 
     matchers = [
+      # Order matters - more specific matches first
+      &match_ekstremalna_hot/1,
+      &match_przeciwny_trend/1,
+      &match_balans_hot_cold/1,
       &match_tylko_nieparzyste/1,
       &match_2_nieparzyste_3_parzyste/1,
       &match_max_2_w_dziesiatce/1,
-      &match_balans_hot_cold/1,
-      &match_ekstremalna_hot/1,
-      &match_przeciwny_trend/1,
       &match_pelna_losowosc/1
     ]
 
@@ -61,7 +62,9 @@ defmodule NumbersEvolution.AIProvider.Mock do
   defp match_balans_hot_cold(normalized_prompt) do
     if String.contains?(normalized_prompt, "balans") and
          (String.contains?(normalized_prompt, "hot") or
-            String.contains?(normalized_prompt, "cold")) do
+            String.contains?(normalized_prompt, "cold")) and
+         (String.contains?(normalized_prompt, "40%") or
+            String.contains?(normalized_prompt, "40 %")) do
       strategy_balans_hot_cold()
     end
   end
@@ -69,7 +72,9 @@ defmodule NumbersEvolution.AIProvider.Mock do
   defp match_ekstremalna_hot(normalized_prompt) do
     if (String.contains?(normalized_prompt, "ekstrem") or
           String.contains?(normalized_prompt, "maksym")) and
-         String.contains?(normalized_prompt, "hot") do
+         String.contains?(normalized_prompt, "hot") and
+         (String.contains?(normalized_prompt, "80%") or
+            String.contains?(normalized_prompt, "80 %")) do
       strategy_ekstremalna_hot()
     end
   end
@@ -77,7 +82,9 @@ defmodule NumbersEvolution.AIProvider.Mock do
   defp match_przeciwny_trend(normalized_prompt) do
     if String.contains?(normalized_prompt, "cold") and
          (String.contains?(normalized_prompt, "przeciw") or
-            String.contains?(normalized_prompt, "rzadko")) do
+            String.contains?(normalized_prompt, "rzadko")) and
+         (String.contains?(normalized_prompt, "70%") or
+            String.contains?(normalized_prompt, "70 %")) do
       strategy_przeciwny_trend()
     end
   end

@@ -15,6 +15,7 @@ defmodule NumbersEvolution.Application do
       NumbersEvolution.Repo,
       {DNSCluster, query: Application.get_env(:numbers_evolution, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: NumbersEvolution.PubSub},
+      {Task.Supervisor, name: NumbersEvolution.TaskSupervisor, max_children: :infinity},
       # Start a worker by calling: NumbersEvolution.Worker.start_link(arg)
       # {NumbersEvolution.Worker, arg},
       # Start to serve requests, typically the last entry
@@ -24,7 +25,26 @@ defmodule NumbersEvolution.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: NumbersEvolution.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    with {:ok, pid} <- Supervisor.start_link(children, opts) do
+      # Start pending simulations after Repo is ready
+      :ok = start_pending_simulations_after_repo_ready()
+      {:ok, pid}
+    end
+  end
+
+  defp start_pending_simulations_after_repo_ready do
+    # Wait a bit for Repo to be ready, then start pending simulations
+    # Use Task.Supervisor to ensure Repo access
+    Task.Supervisor.start_child(
+      NumbersEvolution.TaskSupervisor,
+      fn ->
+        Process.sleep(2000)
+        NumbersEvolution.Simulations.start_pending_simulations()
+      end
+    )
+
+    :ok
   end
 
   # Tell Phoenix to update the endpoint configuration

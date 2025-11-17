@@ -738,7 +738,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   """
   attr :status, :string,
     required: true,
-    values: ~w(pending running success timeout error)
+    values: ~w(pending running success timeout max_attempts_reached error)
 
   def status_indicator(assigns) do
     config = %{
@@ -761,6 +761,11 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       "timeout" => %{
         icon: "hero-clock",
         text: "Timeout",
+        class: "text-warning"
+      },
+      "max_attempts_reached" => %{
+        icon: "hero-exclamation-triangle",
+        text: "Przekroczono limit prób",
         class: "text-warning"
       },
       "error" => %{
