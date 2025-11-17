@@ -281,7 +281,9 @@ defmodule NumbersEvolutionWeb.PageLive do
 
         main_numbers = Enum.join(target_draw.numbers.main_numbers, ", ")
         euro_numbers = Enum.join(target_draw.numbers.euro_numbers, ", ")
-        target_info = "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
+
+        target_info =
+          "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
 
         socket =
           socket
@@ -303,7 +305,8 @@ defmodule NumbersEvolutionWeb.PageLive do
         {:noreply, put_flash(socket, :error, "Błąd walidacji: #{errors}")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Nie udało się uruchomić symulacji: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się uruchomić symulacji: #{inspect(reason)}")}
     end
   end
 
@@ -329,7 +332,8 @@ defmodule NumbersEvolutionWeb.PageLive do
         {:noreply, put_flash(socket, :error, "Tylko symulacje z błędem można ponowić")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Nie udało się ponowić symulacji: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się ponowić symulacji: #{inspect(reason)}")}
     end
   end
 
@@ -352,14 +356,19 @@ defmodule NumbersEvolutionWeb.PageLive do
 
       {:error, :stale_entry} ->
         {:noreply,
-         put_flash(socket, :error, "Symulacja została zmodyfikowana. Odśwież stronę i spróbuj ponownie.")}
+         put_flash(
+           socket,
+           :error,
+           "Symulacja została zmodyfikowana. Odśwież stronę i spróbuj ponownie."
+         )}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         errors = translate_errors(changeset)
         {:noreply, put_flash(socket, :error, "Nie udało się usunąć symulacji: #{errors}")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Nie udało się usunąć symulacji: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się usunąć symulacji: #{inspect(reason)}")}
     end
   end
 
@@ -370,6 +379,7 @@ defmodule NumbersEvolutionWeb.PageLive do
     case Simulations.toggle_favorite(user, simulation_id) do
       {:ok, simulation} ->
         favorite_text = if simulation.is_favorite, do: "oznaczona", else: "odznaczona"
+
         socket =
           socket
           |> put_flash(:info, "Symulacja została #{favorite_text}")
@@ -382,7 +392,8 @@ defmodule NumbersEvolutionWeb.PageLive do
         {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Nie udało się oznaczyć symulacji: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się oznaczyć symulacji: #{inspect(reason)}")}
     end
   end
 
@@ -995,7 +1006,7 @@ defmodule NumbersEvolutionWeb.PageLive do
                 type="number"
                 label="Nowy timeout (sekundy)"
                 min="10"
-                max="3600"
+                max="36000"
                 required
               />
               <p class="text-sm text-base-content/70 mt-2">

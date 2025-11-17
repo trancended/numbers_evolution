@@ -5,7 +5,8 @@ defmodule NumbersEvolution.Repo.Migrations.UpdateSimulationsStatusConstraint do
     drop constraint(:simulations, :simulations_status_check)
 
     create constraint(:simulations, :simulations_status_check,
-             check: "status IN ('pending', 'running', 'success', 'timeout', 'max_attempts_reached', 'error', 'cancelled')"
+             check:
+               "status IN ('pending', 'running', 'success', 'timeout', 'max_attempts_reached', 'error', 'cancelled')"
            )
   end
 

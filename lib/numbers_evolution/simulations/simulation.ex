@@ -59,7 +59,15 @@ defmodule NumbersEvolution.Simulations.Simulation do
   """
   def changeset(simulation, attrs) do
     simulation
-    |> cast(attrs, [:strategy_id, :target_draw_id, :status, :attempts_count, :duration_seconds, :options, :is_favorite])
+    |> cast(attrs, [
+      :strategy_id,
+      :target_draw_id,
+      :status,
+      :attempts_count,
+      :duration_seconds,
+      :options,
+      :is_favorite
+    ])
     |> validate_required([:strategy_id, :target_draw_id, :status])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_number(:attempts_count, greater_than_or_equal_to: 0)

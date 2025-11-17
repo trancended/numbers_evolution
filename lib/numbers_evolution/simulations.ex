@@ -452,7 +452,10 @@ defmodule NumbersEvolution.Simulations do
 
   defp start_simulation_task(simulation, strategy, target_draw) do
     require Logger
-    Logger.info("Starting simulation task for simulation #{simulation.id} (process: #{inspect(self())})")
+
+    Logger.info(
+      "Starting simulation task for simulation #{simulation.id} (process: #{inspect(self())})"
+    )
 
     # Use Task.Supervisor to ensure proper process supervision and Repo access
     # Each simulation runs in its own independent process, allowing parallel execution
@@ -461,6 +464,7 @@ defmodule NumbersEvolution.Simulations do
            fn ->
              process_id = inspect(self())
              Logger.info("Simulation #{simulation.id} running in process #{process_id}")
+
              try do
                run_simulation(simulation.id, strategy, target_draw)
              catch
@@ -471,7 +475,10 @@ defmodule NumbersEvolution.Simulations do
            end
          ) do
       {:ok, task_pid} ->
-        Logger.info("Simulation task started successfully for #{simulation.id} in process #{inspect(task_pid)}")
+        Logger.info(
+          "Simulation task started successfully for #{simulation.id} in process #{inspect(task_pid)}"
+        )
+
         :ok
 
       {:error, reason} ->
@@ -479,6 +486,7 @@ defmodule NumbersEvolution.Simulations do
         # Update simulation status to error
         try do
           simulation = Repo.get!(Simulation, simulation.id)
+
           simulation
           |> Simulation.completion_changeset("error", %{
             attempts_count: 0,
@@ -776,7 +784,8 @@ defmodule NumbersEvolution.Simulations do
       {:error, :not_found}
 
   """
-  @spec delete_simulation(User.t(), binary()) :: {:ok, Simulation.t()} | {:error, atom() | Ecto.Changeset.t()}
+  @spec delete_simulation(User.t(), binary()) ::
+          {:ok, Simulation.t()} | {:error, atom() | Ecto.Changeset.t()}
   def delete_simulation(user, simulation_id) do
     simulation = get_simulation!(user, simulation_id)
 

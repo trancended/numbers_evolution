@@ -506,7 +506,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               class="input input-bordered"
               placeholder="300"
               min="10"
-              max="3600"
+              max="36000"
             />
             <label class="label">
               <span class="label-text-alt">Domyślnie: 300s (5 minut)</span>
@@ -553,7 +553,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               <td>
                 <%= if @strategy_pools && Map.has_key?(@strategy_pools, sim.id) do %>
                   {pools = Map.get(@strategy_pools, sim.id)
-                   render_strategy_pools(pools)}
+                  render_strategy_pools(pools)}
                 <% else %>
                   <span>—</span>
                 <% end %>
@@ -564,19 +564,33 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                   else: "—"}
               </td>
               <td>
-                <%= if Ecto.assoc_loaded?(sim.target_draw) && sim.target_draw do
-                  main = Enum.join(sim.target_draw.numbers.main_numbers, ", ")
-                  euro = Enum.join(sim.target_draw.numbers.euro_numbers, ", ")
-                  "<div class=\"text-xs\"><div>main: #{main}</div><div>euro: #{euro}</div></div>"
-                else
-                  "<span>—</span>"
-                end |> Phoenix.HTML.raw() %>
+                <%= if Ecto.assoc_loaded?(sim.target_draw) && sim.target_draw do %>
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2 text-xs">
+                      <.number_ball
+                        numbers={sim.target_draw.numbers.main_numbers}
+                        type="main"
+                        size="xs"
+                      />
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                      <.number_ball
+                        numbers={sim.target_draw.numbers.euro_numbers}
+                        type="euro"
+                        size="xs"
+                      />
+                    </div>
+                  </div>
+                <% else %>
+                  <span>—</span>
+                <% end %>
               </td>
               <td>{Calendar.strftime(sim.inserted_at, "%Y-%m-%d %H:%M")}</td>
               <td>
-                <%= cond do
+                {cond do
                   sim.status == "running" && @live_attempts ->
                     sim_id_string = to_string(sim.id)
+
                     if Map.has_key?(@live_attempts, sim_id_string) do
                       attempts = Map.get(@live_attempts, sim_id_string)
                       "<span class=\"font-mono\">#{format_number(attempts)}</span>"
@@ -587,24 +601,30 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                         "<span>—</span>"
                       end
                     end
+
                   sim.attempts_count && sim.attempts_count > 0 ->
                     "<span>#{format_number(sim.attempts_count)}</span>"
+
                   true ->
                     "<span>—</span>"
-                end |> Phoenix.HTML.raw() %>
+                end
+                |> Phoenix.HTML.raw()}
               </td>
               <td>
                 <div class="flex flex-col gap-1">
                   <.status_indicator status={sim.status} />
                   <%= if sim.status == "error" && sim.result && sim.result.error_message do %>
-                    <div class="text-xs text-error mt-1 max-w-xs truncate" title={sim.result.error_message}>
+                    <div
+                      class="text-xs text-error mt-1 max-w-xs truncate"
+                      title={sim.result.error_message}
+                    >
                       {sim.result.error_message}
                     </div>
                   <% end %>
                 </div>
               </td>
               <td>
-                <div class="flex gap-2 flex-wrap items-center">
+                <div class="flex flex-col gap-1">
                   <%= if sim.status == "max_attempts_reached" do %>
                     <button
                       phx-click="show_update_max_attempts"
@@ -632,10 +652,15 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                       "btn btn-sm",
                       if(sim.is_favorite, do: "btn-warning", else: "btn-ghost")
                     ]}
-                    title={if sim.is_favorite, do: "Odznacz jako ulubioną", else: "Oznacz jako ulubioną"}
+                    title={
+                      if sim.is_favorite, do: "Odznacz jako ulubioną", else: "Oznacz jako ulubioną"
+                    }
                   >
-                    <.icon name={if sim.is_favorite, do: "hero-star-solid", else: "hero-star"} class="size-4" />
-                    <%= if sim.is_favorite, do: "Oznaczona", else: "Oznacz" %>
+                    <.icon
+                      name={if sim.is_favorite, do: "hero-star-solid", else: "hero-star"}
+                      class="size-4"
+                    />
+                    {if sim.is_favorite, do: "Oznaczona", else: "Oznacz"}
                   </button>
                   <%= if sim.status in ["error", "timeout", "max_attempts_reached", "success", "cancelled"] do %>
                     <button
