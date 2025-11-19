@@ -36,14 +36,31 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
+  @doc """
+  Returns strategy pool details showing which numbers are in hot/cold/random pools.
+
+  Returns a map with `:main_numbers` and `:euro_numbers` pools.
+  """
+  @spec get_strategy_pools(Strategy.t()) :: %{
+          main_numbers: %{hot: [integer()], cold: [integer()], random: [integer()]},
+          euro_numbers: %{hot: [integer()], random: [integer()]}
+        }
+  def get_strategy_pools(%Strategy{rules: rules}) do
+    %{
+      main_numbers: build_main_pools(rules.main_numbers),
+      euro_numbers: build_euro_pools(rules.euro_numbers)
+    }
+  end
+
   ## Main Numbers (5 from 1-50)
 
   defp generate_main_numbers(main_rules) do
     pools = build_main_pools(main_rules)
     [even_count, odd_count] = main_rules.ratio_even_odd
     [low_count, high_count] = main_rules.ratio_low_high
+    weights_map = weights_to_map(main_rules.weights, [:hot, :cold, :random])
 
-    generate_with_constraints(pools, main_rules.weights, 5, %{
+    generate_with_constraints(pools, weights_map, 5, %{
       even: even_count,
       odd: odd_count,
       low: low_count,
@@ -217,6 +234,18 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
+  defp weights_to_map(weights_struct, fields) when is_struct(weights_struct) do
+    Enum.into(fields, %{}, fn field -> {field, Map.get(weights_struct, field)} end)
+  end
+
+  defp weights_to_map(weights_map, _fields) when is_map(weights_map) do
+    weights_map
+  end
+
+  defp weights_to_map(nil, _fields) do
+    raise ArgumentError, "weights cannot be nil"
+  end
+
   defp weighted_random_pool(weights) do
     rand = :rand.uniform()
 
@@ -233,8 +262,9 @@ defmodule NumbersEvolution.Strategies.Generator do
   defp generate_euro_numbers(euro_rules) do
     pools = build_euro_pools(euro_rules)
     [even_count, odd_count] = euro_rules.ratio_even_odd
+    weights_map = weights_to_map(euro_rules.weights, [:hot, :random])
 
-    generate_euro_with_constraints(pools, euro_rules.weights, 2, %{
+    generate_euro_with_constraints(pools, weights_map, 2, %{
       even: even_count,
       odd: odd_count
     })

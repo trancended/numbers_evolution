@@ -21,6 +21,7 @@ defmodule NumbersEvolution.Simulations.Simulation do
           duration_seconds: float(),
           status: String.t(),
           result: SimulationResult.t() | nil,
+          is_favorite: boolean(),
           started_at: DateTime.t() | nil,
           completed_at: DateTime.t() | nil,
           user: User.t() | Ecto.Association.NotLoaded.t(),
@@ -30,7 +31,7 @@ defmodule NumbersEvolution.Simulations.Simulation do
           updated_at: DateTime.t()
         }
 
-  @valid_statuses ~w(pending running success timeout error cancelled)
+  @valid_statuses ~w(pending running success timeout max_attempts_reached error cancelled)
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
@@ -39,6 +40,8 @@ defmodule NumbersEvolution.Simulations.Simulation do
     field :attempts_count, :integer, default: 0
     field :duration_seconds, :float, default: 0.0
     field :status, :string
+    field :options, :map, default: %{}
+    field :is_favorite, :boolean, default: false
     field :started_at, :utc_datetime
     field :completed_at, :utc_datetime
 
@@ -56,7 +59,15 @@ defmodule NumbersEvolution.Simulations.Simulation do
   """
   def changeset(simulation, attrs) do
     simulation
-    |> cast(attrs, [:strategy_id, :target_draw_id, :status, :attempts_count, :duration_seconds])
+    |> cast(attrs, [
+      :strategy_id,
+      :target_draw_id,
+      :status,
+      :attempts_count,
+      :duration_seconds,
+      :options,
+      :is_favorite
+    ])
     |> validate_required([:strategy_id, :target_draw_id, :status])
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_number(:attempts_count, greater_than_or_equal_to: 0)
@@ -71,7 +82,7 @@ defmodule NumbersEvolution.Simulations.Simulation do
   """
   def start_changeset(simulation) do
     simulation
-    |> change(status: "running", started_at: DateTime.utc_now())
+    |> change(status: "running", started_at: DateTime.truncate(DateTime.utc_now(), :second))
   end
 
   @doc """
@@ -81,7 +92,7 @@ defmodule NumbersEvolution.Simulations.Simulation do
     simulation
     |> cast(attrs, [:attempts_count, :duration_seconds])
     |> put_change(:status, status)
-    |> put_change(:completed_at, DateTime.utc_now())
+    |> put_change(:completed_at, DateTime.truncate(DateTime.utc_now(), :second))
     |> cast_embed(:result, required: status == "success")
     |> validate_completion_timing()
   end

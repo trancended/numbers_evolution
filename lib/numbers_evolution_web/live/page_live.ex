@@ -12,6 +12,7 @@ defmodule NumbersEvolutionWeb.PageLive do
   use NumbersEvolutionWeb, :live_view
 
   alias NumbersEvolution.{Accounts, Draws, Simulations, Strategies}
+  alias NumbersEvolution.Strategies.Generator
 
   # Import section components
   import NumbersEvolutionWeb.PageComponents
@@ -33,10 +34,18 @@ defmodule NumbersEvolutionWeb.PageLive do
       |> assign(:page_title, "Numbers Evolution")
       |> assign(:show_register_form, false)
       |> assign(:show_login_form, false)
+      |> assign(:show_update_max_attempts_modal, false)
+      |> assign(:update_max_attempts_simulation_id, nil)
+      |> assign(:update_max_attempts_form, to_form(%{}, as: :update_max_attempts))
+      |> assign(:show_update_timeout_modal, false)
+      |> assign(:update_timeout_simulation_id, nil)
+      |> assign(:update_timeout_form, to_form(%{}, as: :update_timeout))
       |> assign(:register_form, to_form(%{}, as: :user))
       |> assign(:login_form, to_form(%{}, as: :user))
+      |> assign(:live_attempts, %{})
       |> initialize_section_data(current_user)
       |> load_dashboard_data_if_user(current_user)
+      |> subscribe_to_running_simulations(current_user)
 
     {:ok, socket}
   end
@@ -264,12 +273,26 @@ defmodule NumbersEvolutionWeb.PageLive do
   def handle_event("start_simulation", params, socket) do
     user = socket.assigns.current_user
 
-    case Simulations.start_simulation(user, params) do
-      {:ok, _simulation} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Symulacja została uruchomiona w tle")
-         |> load_simulations()}
+    case Simulations.create_and_start_simulation(user, params) do
+      {:ok, simulation} ->
+        # Get strategy and target draw for display
+        strategy = Strategies.get_strategy!(user, params["strategy_id"])
+        target_draw = Draws.get_draw!(params["target_draw_id"])
+
+        main_numbers = Enum.join(target_draw.numbers.main_numbers, ", ")
+        euro_numbers = Enum.join(target_draw.numbers.euro_numbers, ", ")
+
+        target_info =
+          "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
+
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została uruchomiona w tle. #{target_info}")
+          |> load_simulations()
+          |> load_dashboard_data()
+          |> subscribe_to_simulation(simulation.id)
+
+        {:noreply, socket}
 
       {:error, :strategy_not_found} ->
         {:noreply, put_flash(socket, :error, "Nie znaleziono strategii")}
@@ -277,8 +300,254 @@ defmodule NumbersEvolutionWeb.PageLive do
       {:error, :draw_not_found} ->
         {:noreply, put_flash(socket, :error, "Nie znaleziono losowania")}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Nie udało się uruchomić symulacji")}
+      {:error, changeset} when is_struct(changeset) ->
+        errors = translate_errors(changeset)
+        {:noreply, put_flash(socket, :error, "Błąd walidacji: #{errors}")}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się uruchomić symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("retry_simulation", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.retry_simulation(user, simulation_id) do
+      {:ok, simulation} ->
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została ponownie uruchomiona")
+          |> load_simulations()
+          |> load_dashboard_data()
+          |> subscribe_to_simulation(simulation.id)
+
+        {:noreply, socket}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+
+      {:error, :not_retryable} ->
+        {:noreply, put_flash(socket, :error, "Tylko symulacje z błędem można ponowić")}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się ponowić symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_simulation", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.delete_simulation(user, simulation_id) do
+      {:ok, _simulation} ->
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została usunięta")
+          |> load_simulations()
+          |> load_dashboard_data()
+
+        {:noreply, socket}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+
+      {:error, :stale_entry} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Symulacja została zmodyfikowana. Odśwież stronę i spróbuj ponownie."
+         )}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        errors = translate_errors(changeset)
+        {:noreply, put_flash(socket, :error, "Nie udało się usunąć symulacji: #{errors}")}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się usunąć symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_favorite", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.toggle_favorite(user, simulation_id) do
+      {:ok, simulation} ->
+        favorite_text = if simulation.is_favorite, do: "oznaczona", else: "odznaczona"
+
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została #{favorite_text}")
+          |> load_simulations()
+          |> load_dashboard_data()
+
+        {:noreply, socket}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się oznaczyć symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("show_update_max_attempts", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.get_simulation_with_details(user, simulation_id) do
+      %{status: "max_attempts_reached", options: options} ->
+        current_max_attempts = get_in(options, ["max_attempts"]) || 1_000_000
+
+        form_data = %{"max_attempts" => Integer.to_string(current_max_attempts)}
+        form = to_form(form_data, as: :update_max_attempts)
+
+        {:noreply,
+         socket
+         |> assign(:show_update_max_attempts_modal, true)
+         |> assign(:update_max_attempts_simulation_id, simulation_id)
+         |> assign(:update_max_attempts_form, form)}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie może mieć zmienionego limitu prób")}
+    end
+  end
+
+  @impl true
+  def handle_event("close_update_max_attempts_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_update_max_attempts_modal, false)
+     |> assign(:update_max_attempts_simulation_id, nil)}
+  end
+
+  @impl true
+  def handle_event("update_max_attempts", %{"update_max_attempts" => params}, socket) do
+    user = socket.assigns.current_user
+    simulation_id = socket.assigns.update_max_attempts_simulation_id
+    max_attempts = params["max_attempts"]
+
+    case Integer.parse(max_attempts) do
+      {max_attempts_int, _} when max_attempts_int > 0 ->
+        case Simulations.update_max_attempts_and_retry(user, simulation_id, max_attempts_int) do
+          {:ok, simulation} ->
+            socket =
+              socket
+              |> assign(:show_update_max_attempts_modal, false)
+              |> assign(:update_max_attempts_simulation_id, nil)
+              |> put_flash(:info, "Symulacja została uruchomiona z nowym limitem prób")
+              |> load_simulations()
+              |> load_dashboard_data()
+              |> subscribe_to_simulation(simulation.id)
+
+            {:noreply, socket}
+
+          {:error, :not_found} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_max_attempts_modal, false)
+             |> put_flash(:error, "Symulacja nie została znaleziona")}
+
+          {:error, :not_retryable} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_max_attempts_modal, false)
+             |> put_flash(:error, "Tylko symulacje z przekroczonym limitem prób można ponowić")}
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_max_attempts_modal, false)
+             |> put_flash(:error, "Nie udało się zaktualizować limitu prób: #{inspect(reason)}")}
+        end
+
+      _ ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Nieprawidłowa wartość limitu prób")}
+    end
+  end
+
+  @impl true
+  def handle_event("show_update_timeout", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.get_simulation_with_details(user, simulation_id) do
+      %{status: "timeout", options: options} ->
+        current_timeout = get_in(options, ["timeout_seconds"]) || 300
+
+        form_data = %{"timeout_seconds" => Integer.to_string(current_timeout)}
+        form = to_form(form_data, as: :update_timeout)
+
+        {:noreply,
+         socket
+         |> assign(:show_update_timeout_modal, true)
+         |> assign(:update_timeout_simulation_id, simulation_id)
+         |> assign(:update_timeout_form, form)}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie może mieć zmienionego czasu trwania")}
+    end
+  end
+
+  @impl true
+  def handle_event("close_update_timeout_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_update_timeout_modal, false)
+     |> assign(:update_timeout_simulation_id, nil)}
+  end
+
+  @impl true
+  def handle_event("update_timeout", %{"update_timeout" => params}, socket) do
+    user = socket.assigns.current_user
+    simulation_id = socket.assigns.update_timeout_simulation_id
+    timeout_seconds = params["timeout_seconds"]
+
+    case Integer.parse(timeout_seconds) do
+      {timeout_int, _} when timeout_int > 0 ->
+        case Simulations.update_timeout_and_retry(user, simulation_id, timeout_int) do
+          {:ok, simulation} ->
+            socket =
+              socket
+              |> assign(:show_update_timeout_modal, false)
+              |> assign(:update_timeout_simulation_id, nil)
+              |> put_flash(:info, "Symulacja została uruchomiona z nowym czasem trwania")
+              |> load_simulations()
+              |> load_dashboard_data()
+              |> subscribe_to_simulation(simulation.id)
+
+            {:noreply, socket}
+
+          {:error, :not_found} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_timeout_modal, false)
+             |> put_flash(:error, "Symulacja nie została znaleziona")}
+
+          {:error, :not_retryable} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_timeout_modal, false)
+             |> put_flash(:error, "Tylko symulacje z timeout można ponowić")}
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> assign(:show_update_timeout_modal, false)
+             |> put_flash(:error, "Nie udało się zaktualizować czasu trwania: #{inspect(reason)}")}
+        end
+
+      _ ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Nieprawidłowa wartość czasu trwania")}
     end
   end
 
@@ -416,16 +685,6 @@ defmodule NumbersEvolutionWeb.PageLive do
     assign(socket, :strategies, strategies)
   end
 
-  defp load_simulations(socket) do
-    user = socket.assigns.current_user
-    simulations = if user, do: Simulations.list_simulations(user), else: []
-    draws = Draws.list_draws(limit: 50)
-
-    socket
-    |> assign(:simulations, simulations)
-    |> assign(:draws, draws)
-  end
-
   defp load_ranking(socket) do
     user = socket.assigns.current_user
 
@@ -456,13 +715,27 @@ defmodule NumbersEvolutionWeb.PageLive do
     if user do
       stats = Accounts.get_user_stats(user)
       recent_simulations = Simulations.list_simulations(user, limit: 5)
+      strategy_pools = build_strategy_pools_map(recent_simulations)
 
       socket
       |> assign(:user_stats, stats)
       |> assign(:recent_simulations, recent_simulations)
+      |> assign(:strategy_pools, strategy_pools)
     else
       socket
     end
+  end
+
+  defp load_simulations(socket) do
+    user = socket.assigns.current_user
+    simulations = if user, do: Simulations.list_simulations(user), else: []
+    draws = Draws.list_draws(limit: 50)
+    strategy_pools = build_strategy_pools_map(simulations)
+
+    socket
+    |> assign(:simulations, simulations)
+    |> assign(:draws, draws)
+    |> assign(:strategy_pools, strategy_pools)
   end
 
   # ============================================================================
@@ -491,6 +764,17 @@ defmodule NumbersEvolutionWeb.PageLive do
       Enum.find(socket.assigns[:strategies] || [], fn s -> s.id == strategy_id end)
   end
 
+  defp build_strategy_pools_map(simulations) do
+    simulations
+    |> Enum.filter(fn sim ->
+      Ecto.assoc_loaded?(sim.strategy) && sim.strategy != nil
+    end)
+    |> Enum.reduce(%{}, fn sim, acc ->
+      pools = Generator.get_strategy_pools(sim.strategy)
+      Map.put(acc, sim.id, pools)
+    end)
+  end
+
   defp generate_coupons_for_strategy(strategy, count) when count >= 1 and count <= 10 do
     coupons =
       1..count
@@ -517,6 +801,12 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   defp generate_coupons_for_strategy(_strategy, _count), do: {:error, :invalid_count}
 
+  defp translate_errors(changeset) do
+    changeset.errors
+    |> Enum.map(fn {field, {message, _}} -> "#{field}: #{message}" end)
+    |> Enum.join(", ")
+  end
+
   defp extract_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Enum.reduce(opts, msg, fn {key, value}, acc ->
@@ -524,6 +814,78 @@ defmodule NumbersEvolutionWeb.PageLive do
       end)
     end)
     |> Enum.map_join("; ", fn {key, errors} -> "#{key}: #{Enum.join(errors, ", ")}" end)
+  end
+
+  # ============================================================================
+  # PubSub Handlers for Real-time Updates
+  # ============================================================================
+
+  @impl true
+  def handle_info({:simulation_progress, simulation_id, %{attempts: attempts}}, socket) do
+    # Ensure simulation_id is a string for consistent map keys
+    sim_id_string = to_string(simulation_id)
+    live_attempts = Map.put(socket.assigns.live_attempts || %{}, sim_id_string, attempts)
+
+    {:noreply, assign(socket, :live_attempts, live_attempts)}
+  end
+
+  @impl true
+  def handle_info({:simulation_complete, simulation}, socket) do
+    simulation_id = simulation.id
+
+    # Remove from live_attempts and unsubscribe
+    live_attempts = Map.delete(socket.assigns.live_attempts || %{}, simulation_id)
+
+    socket =
+      socket
+      |> assign(:live_attempts, live_attempts)
+      |> unsubscribe_from_simulation(simulation_id)
+      |> load_simulations()
+      |> load_dashboard_data()
+
+    {:noreply, socket}
+  end
+
+  # Fallback handler for unknown messages
+  @impl true
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # ============================================================================
+  # PubSub Subscription Helpers
+  # ============================================================================
+
+  defp subscribe_to_running_simulations(socket, nil), do: socket
+
+  defp subscribe_to_running_simulations(socket, user) do
+    if connected?(socket) do
+      running_simulations = Simulations.list_simulations(user, status: "running")
+
+      Enum.reduce(running_simulations, socket, fn simulation, acc ->
+        subscribe_to_simulation(acc, simulation.id)
+      end)
+    else
+      socket
+    end
+  end
+
+  defp subscribe_to_simulation(socket, simulation_id) do
+    if connected?(socket) do
+      topic = "simulation:#{simulation_id}"
+      Phoenix.PubSub.subscribe(NumbersEvolution.PubSub, topic)
+      socket
+    else
+      socket
+    end
+  end
+
+  defp unsubscribe_from_simulation(socket, simulation_id) do
+    if connected?(socket) do
+      topic = "simulation:#{simulation_id}"
+      Phoenix.PubSub.unsubscribe(NumbersEvolution.PubSub, topic)
+      socket
+    else
+      socket
+    end
   end
 
   # ============================================================================
@@ -548,6 +910,7 @@ defmodule NumbersEvolutionWeb.PageLive do
                     %{strategies_count: 0, simulations_count: 0, best_strategy: nil}
                 }
                 recent_simulations={assigns[:recent_simulations] || []}
+                live_attempts={@live_attempts}
               />
             <% :strategies -> %>
               <.strategies_section
@@ -563,6 +926,8 @@ defmodule NumbersEvolutionWeb.PageLive do
                 strategies={@strategies}
                 simulations={@simulations}
                 draws={@draws}
+                live_attempts={@live_attempts}
+                strategy_pools={assigns[:strategy_pools] || %{}}
               />
             <% :ranking -> %>
               <.ranking_section strategies={@strategies} />
@@ -579,9 +944,89 @@ defmodule NumbersEvolutionWeb.PageLive do
                     %{strategies_count: 0, simulations_count: 0, best_strategy: nil}
                 }
                 recent_simulations={assigns[:recent_simulations] || []}
+                live_attempts={@live_attempts}
               />
           <% end %>
         </main>
+
+        <%!-- Update Max Attempts Modal --%>
+        <%= if @show_update_max_attempts_modal do %>
+          <.modal
+            id="update-max-attempts-modal"
+            show={true}
+            on_cancel={JS.push("close_update_max_attempts_modal")}
+          >
+            <:title>Zmień limit prób</:title>
+            <.form
+              for={@update_max_attempts_form}
+              id="update-max-attempts-form"
+              phx-submit="update_max_attempts"
+            >
+              <.input
+                field={@update_max_attempts_form[:max_attempts]}
+                type="number"
+                label="Nowy limit prób"
+                min="1"
+                required
+              />
+              <p class="text-sm text-base-content/70 mt-2">
+                Symulacja zostanie uruchomiona ponownie z nowym limitem prób.
+              </p>
+              <div class="modal-action">
+                <button
+                  type="button"
+                  phx-click="close_update_max_attempts_modal"
+                  class="btn"
+                >
+                  Anuluj
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Uruchom z nowym limitem
+                </button>
+              </div>
+            </.form>
+          </.modal>
+        <% end %>
+
+        <%!-- Update Timeout Modal --%>
+        <%= if @show_update_timeout_modal do %>
+          <.modal
+            id="update-timeout-modal"
+            show={true}
+            on_cancel={JS.push("close_update_timeout_modal")}
+          >
+            <:title>Zmień timeout</:title>
+            <.form
+              for={@update_timeout_form}
+              id="update-timeout-form"
+              phx-submit="update_timeout"
+            >
+              <.input
+                field={@update_timeout_form[:timeout_seconds]}
+                type="number"
+                label="Nowy timeout (sekundy)"
+                min="10"
+                max="36000"
+                required
+              />
+              <p class="text-sm text-base-content/70 mt-2">
+                Symulacja zostanie uruchomiona ponownie z nowym czasem trwania.
+              </p>
+              <div class="modal-action">
+                <button
+                  type="button"
+                  phx-click="close_update_timeout_modal"
+                  class="btn"
+                >
+                  Anuluj
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Uruchom z nowym timeoutem
+                </button>
+              </div>
+            </.form>
+          </.modal>
+        <% end %>
       <% else %>
         <.landing_section
           show_register_form={@show_register_form}

@@ -738,7 +738,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   """
   attr :status, :string,
     required: true,
-    values: ~w(pending running success timeout error)
+    values: ~w(pending running success timeout max_attempts_reached error)
 
   def status_indicator(assigns) do
     config = %{
@@ -761,6 +761,11 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       "timeout" => %{
         icon: "hero-clock",
         text: "Timeout",
+        class: "text-warning"
+      },
+      "max_attempts_reached" => %{
+        icon: "hero-exclamation-triangle",
+        text: "Przekroczono limit prób",
         class: "text-warning"
       },
       "error" => %{
@@ -816,6 +821,60 @@ defmodule NumbersEvolutionWeb.CoreComponents do
           {render_slot(@actions)}
         </div>
       </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders Eurojackpot number balls.
+
+  ## Examples
+
+      <.number_ball numbers={[1, 2, 3, 4, 5]} type="main" />
+      <.number_ball numbers={[1, 2]} type="euro" />
+
+  ## Attributes
+
+  - `numbers`: List of numbers to display
+  - `type`: Either "main" for blue balls or "euro" for yellow balls
+  - `size`: Size of the balls, defaults to "sm"
+  """
+  attr :numbers, :list, required: true, doc: "List of numbers to display"
+
+  attr :type, :string,
+    values: ["main", "euro"],
+    required: true,
+    doc: "Type of numbers (main or euro)"
+
+  attr :size, :string, values: ["xs", "sm", "md", "lg"], default: "sm", doc: "Size of the balls"
+
+  def number_ball(assigns) do
+    base_classes =
+      "inline-flex items-center justify-center rounded-full font-bold text-white shadow-lg border-2"
+
+    size_classes =
+      case assigns.size do
+        "xs" -> "w-6 h-6 text-xs"
+        "sm" -> "w-8 h-8 text-sm"
+        "md" -> "w-10 h-10 text-base"
+        "lg" -> "w-12 h-12 text-lg"
+      end
+
+    color_classes =
+      case assigns.type do
+        "main" -> "bg-blue-500 border-blue-600"
+        "euro" -> "bg-yellow-400 border-yellow-500"
+      end
+
+    assigns = assign(assigns, :classes, [base_classes, size_classes, color_classes])
+
+    ~H"""
+    <div class="flex gap-1">
+      <%= for number <- @numbers do %>
+        <div class={@classes}>
+          {number}
+        </div>
+      <% end %>
     </div>
     """
   end

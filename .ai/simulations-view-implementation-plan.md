@@ -843,7 +843,7 @@ defp simulation_form(assigns) do
             class="input input-bordered"
             placeholder="300"
             min="10"
-            max="3600"
+            max="36000"
           />
           <label class="label">
             <span class="label-text-alt">Domyślnie: 300s (5 minut)</span>
