@@ -86,3 +86,13 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Configure OpenRouter AI provider for development
+config :numbers_evolution, :ai_provider, NumbersEvolution.Strategies.OpenRouterService
+
+config :numbers_evolution, :openrouter,
+  api_key: System.get_env("OPENROUTER_API_KEY"),
+  base_url: "https://openrouter.ai/api/v1",
+  default_model: "openai/gpt-4o-mini",
+  timeout: 30_000,
+  rate_limit_per_hour: 100

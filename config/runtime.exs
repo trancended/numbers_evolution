@@ -116,4 +116,21 @@ if config_env() == :prod do
   #     config :swoosh, :api_client, Swoosh.ApiClient.Req
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
+
+  # Configure OpenRouter AI provider for production
+  config :numbers_evolution, :ai_provider, NumbersEvolution.Strategies.OpenRouterService
+
+  openrouter_api_key =
+    System.get_env("OPENROUTER_API_KEY") ||
+      raise """
+      environment variable OPENROUTER_API_KEY is missing.
+      You can get an API key from https://openrouter.ai/
+      """
+
+  config :numbers_evolution, :openrouter,
+    api_key: openrouter_api_key,
+    base_url: "https://openrouter.ai/api/v1",
+    default_model: "openai/gpt-4o-mini",
+    timeout: 30_000,
+    rate_limit_per_hour: 100
 end
