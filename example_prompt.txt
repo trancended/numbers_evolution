@@ -1,0 +1,39 @@
+# Przykładowe strategie dostępne w aplikacji
+
+## W aplikacji dostępne są następujące gotowe strategie:
+
+### 1. tylko_nieparzyste
+**Opis:** Strategia całkowicie pomijająca wszystkie parzyste liczby główne
+**Parametry:** ratio 0:5 parzystych/nieparzystych, wagi 50% hot + 50% random
+
+### 2. dwie_nieparzyste_trzy_parzyste
+**Opis:** Precyzyjne ratio z dokładnie 2 nieparzystymi i 3 parzystymi liczbami
+**Parametry:** ratio 3:2 parzystych/nieparzystych, wagi 50% hot + 20% cold + 30% random
+
+### 3. max_dwie_w_dziesiatce
+**Opis:** Ograniczenia dystrybucyjne - max 2 liczby w jednej dziesiątce, bez kolejnych
+**Parametry:** max 2 liczby z dekady, max 1 kolejna, wagi 60% hot + 20% cold + 20% random
+
+### 4. balans_hot_cold
+**Opis:** Zrównoważona strategia łącząca trendy i losowość
+**Parametry:** wagi 40% hot + 20% cold + 40% random, preferencje dla obu typów
+
+### 5. ekstremalna_hot
+**Opis:** Maksymalne skupienie na gorących liczbach z ostatnich losowań
+**Parametry:** 80% hot + 20% random, 9 preferowanych gorących liczb
+
+### 6. przeciwny_trend
+**Opis:** Strategia odwrotna do trendów - skupienie na cold numbers
+**Parametry:** 70% cold + 20% random + 10% hot, preferencje zimnych liczb
+
+## Jak to działa:
+
+1. **Użytkownik klika** na przycisk strategii w UI (np. "Tylko Nieparzyste")
+2. **Aplikacja wywołuje** `build_strategy_prompt("tylko_nieparzyste")`
+3. **Generowany jest szczegółowy prompt** z pełnymi parametrami dla AI
+4. **AI tworzy kompletną strategię** zgodną ze schematem JSON
+5. **Strategia zostaje zapisana** w bazie danych
+
+## Przykład pełnego promptu dla "tylko_nieparzyste":
+
+"Utwórz strategię eurojackpot która całkowicie pomija wszystkie parzyste liczby główne (2,4,6,8,...50). Skup się wyłącznie na 25 nieparzystych liczbach (1,3,5,...49). Dla euro wszystkich liczb używaj normalnie. Strategia powinna mieć: ratio parzystych/nieparzystych 0:5 dla głównych, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot i 50% random, preferuj gorące liczby."
