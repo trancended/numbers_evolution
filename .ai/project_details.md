@@ -494,6 +494,65 @@ Komunikaty walidacji w formularzu przed zapisem (LiveView changeset errors).
 
 ### Kluczowe Historie Użytkownika
 
+#### User Story Auth 1: Rejestracja Nowego Użytkownika
+**Jako** nowy użytkownik systemu
+**Chcę** móc się zarejestrować
+**Aby** mieć dostęp do prywatnych funkcji aplikacji
+
+**Kryteria akceptacji:**
+- Formularz rejestracji z email + hasłem
+- Walidacja formatu email
+- Hasło minimum 12 znaków
+- Automatyczne logowanie po rejestracji
+- Przekierowanie na dashboard po rejestracji
+- Obsługa błędów walidacji
+
+#### User Story Auth 2: Logowanie do Systemu
+**Jako** zarejestrowany użytkownik
+**Chcę** móc się zalogować do systemu
+**Aby** mieć dostęp do swoich danych i funkcji
+
+**Kryteria akceptacji:**
+- Formularz logowania z email + hasłem
+- Pamiętanie sesji między przeglądarkami
+- Automatyczne przekierowanie na dashboard
+- Komunikat błędu przy nieprawidłowych danych
+- Bezpieczne przechowywanie sesji (HttpOnly cookies)
+
+#### User Story Auth 3: Wylogowanie z Systemu
+**Jako** zalogowany użytkownik
+**Chcę** móc się wylogować
+**Aby** zabezpieczyć dostęp do mojego konta
+
+**Kryteria akceptacji:**
+- Przycisk wylogowania w nawigacji
+- Czyszczenie sesji po wylogowaniu
+- Przekierowanie na stronę główną
+- Blokada dostępu do chronionych zasobów po wylogowaniu
+
+#### User Story Auth 4: Izolacja Danych Użytkownika
+**Jako** użytkownik systemu
+**Chcę** widzieć tylko swoje dane
+**Aby** zachować prywatność i bezpieczeństwo
+
+**Kryteria akceptacji:**
+- Wszystkie zapytania do bazy danych filtrowane po user_id
+- Brak dostępu do danych innych użytkowników
+- API wymaga prawidłowej autentyfikacji
+- Próba dostępu bez autentyfikacji zwraca błąd 401
+
+#### User Story Auth 5: Reset Hasła
+**Jako** użytkownik systemu
+**Chcę** móc zresetować hasło
+**Aby** odzyskać dostęp do konta w przypadku zapomnienia hasła
+
+**Kryteria akceptacji:**
+- Link "zapomniałem hasła" na stronie logowania
+- Wysyłanie email z linkiem resetującym
+- Bezpieczny token jednorazowy ważny 24h
+- Formularz zmiany hasła
+- Automatyczne logowanie po zmianie hasła
+
 #### User Story 1: Tworzenie strategii manualnie
 **Jako** Analityk Tomek (persona 1)  
 **Chcę** móc stworzyć strategię typowania ręcznie ustawiając parametry  
