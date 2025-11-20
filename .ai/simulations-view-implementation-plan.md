@@ -245,6 +245,356 @@ end
 }
 ```
 
+## 6.1 Mechanizm zapobiegania duplikatom prób w symulacji
+
+### Przegląd mechanizmu
+
+W ramach jednej symulacji nie mogą wystąpić duplikaty prób - każda próba generowania zestawu liczb musi być unikalna w obrębie pojedynczej symulacji. Mechanizm skipowania powtórzeń zapewnia, że:
+
+- **Brak duplikatów**: Każda kombinacja liczb występuje maksymalnie raz w pojedynczej symulacji
+- **Nie wpływa na licznik**: Pominiete duplikaty nie są liczone jako próby w `attempts_count`
+- **Optymalizacja wydajności**: Unikanie redundantnych obliczeń i sprawdzeń trafień
+
+### Architektura mechanizmu
+
+#### Struktura stanu symulacji z kontrolą duplikatów
+
+```elixir
+# Rozszerzona struktura SimulationResult z informacjami o duplikatach
+%{
+  "matched_main" => [1, 7, 23, 34, 50],
+  "matched_euro" => [3, 9],
+  "attempts_count" => 125430,
+  "final_draw" => %{
+    "main_numbers" => [1, 7, 23, 34, 50],
+    "euro_numbers" => [3, 9]
+  },
+  "duplicates_skipped" => 0,  # Liczba pominiętych duplikatów (nie wpływa na attempts_count)
+  "unique_attempts" => 125430 # attempts_count = total_attempts - duplicates_skipped
+}
+```
+
+#### Implementacja kontrolera duplikatów
+
+```elixir
+defmodule NumbersEvolution.SimulationDuplicateController do
+  @moduledoc """
+  Kontroler zapobiegający duplikatom prób w pojedynczej symulacji.
+
+  Używa MapSet do efektywnego sprawdzania unikalności kombinacji.
+  """
+
+  defstruct [:attempts_set, :duplicates_count]
+
+  @type t :: %__MODULE__{
+    attempts_set: MapSet.t(),
+    duplicates_count: non_neg_integer()
+  }
+
+  @doc """
+  Tworzy nowy kontroler duplikatów dla symulacji.
+  """
+  @spec new() :: t()
+  def new() do
+    %__MODULE__{
+      attempts_set: MapSet.new(),
+      duplicates_count: 0
+    }
+  end
+
+  @doc """
+  Sprawdza czy próba jest duplikatem i aktualizuje stan kontrolera.
+
+  Returns:
+  - `{:unique, controller}` - próba jest unikalna
+  - `{:duplicate, controller}` - próba jest duplikatem, stan zaktualizowany
+  """
+  @spec check_attempt(t(), %{main: list(), euro: list()}) :: {:unique | :duplicate, t()}
+  def check_attempt(%__MODULE__{} = controller, %{main: main, euro: euro}) do
+    # Tworzymy hash kombinacji dla efektywnego porównania
+    combination_hash = generate_combination_hash(main, euro)
+
+    if MapSet.member?(controller.attempts_set, combination_hash) do
+      # Duplikat - zwiększamy licznik i zwracamy :duplicate
+      {:duplicate, %__MODULE__{
+        controller |
+        duplicates_count: controller.duplicates_count + 1
+      }}
+    else
+      # Unikalna próba - dodajemy do zbioru
+      {:unique, %__MODULE__{
+        controller |
+        attempts_set: MapSet.put(controller.attempts_set, combination_hash)
+      }}
+    end
+  end
+
+  @doc """
+  Generuje hash kombinacji dla efektywnego porównania.
+
+  Sortuje liczby aby zapewnić deterministyczny hash niezależny od kolejności.
+  """
+  @spec generate_combination_hash(list(), list()) :: String.t()
+  def generate_combination_hash(main_numbers, euro_numbers) do
+    # Sortujemy liczby dla deterministycznego hasha
+    sorted_main = Enum.sort(main_numbers)
+    sorted_euro = Enum.sort(euro_numbers)
+
+    # Tworzymy string reprezentację
+    main_str = Enum.join(sorted_main, ",")
+    euro_str = Enum.join(sorted_euro, ",")
+
+    # Generujemy hash
+    :crypto.hash(:md5, "#{main_str}|#{euro_str}")
+    |> Base.encode16(case: :lower)
+  end
+
+  @doc """
+  Zwraca statystyki duplikatów dla podsumowania symulacji.
+  """
+  @spec get_stats(t()) :: %{duplicates_skipped: non_neg_integer()}
+  def get_stats(%__MODULE__{duplicates_count: count}) do
+    %{duplicates_skipped: count}
+  end
+end
+```
+
+### Integracja z główną pętlą symulacji
+
+#### Modyfikacja `simulate_until_match/6`
+
+```elixir
+defp simulate_until_match(rules, target, max_attempts, timeout, start_time, controller, current_attempt \\ 0) do
+  # Sprawdź limity czasowe i ilościowe
+  cond do
+    current_attempt >= max_attempts ->
+      {:timeout, "max_attempts", current_attempt, controller}
+
+    System.monotonic_time(:second) - start_time >= timeout ->
+      {:timeout, "time_limit", current_attempt, controller}
+
+    true ->
+      # Wygeneruj liczby
+      generated = NumbersEvolution.NumberGenerator.generate_numbers(rules)
+
+      # Sprawdź czy próba jest duplikatem
+      case SimulationDuplicateController.check_attempt(controller, generated) do
+        {:duplicate, updated_controller} ->
+          # Pomijamy duplikat - rekurencyjne wywołanie bez zwiększania licznika prób
+          simulate_until_match(rules, target, max_attempts, timeout, start_time, updated_controller, current_attempt)
+
+        {:unique, updated_controller} ->
+          # Unikalna próba - sprawdzamy trafienie
+          if matches_target?(generated, target) do
+            {:success, current_attempt + 1, generated, updated_controller}
+          else
+            # Kontynuujemy z następną próbą
+            simulate_until_match(rules, target, max_attempts, timeout, start_time, updated_controller, current_attempt + 1)
+          end
+      end
+  end
+end
+```
+
+#### Aktualizacja `run_simulation/3`
+
+```elixir
+defp run_simulation(simulation, strategy, target_draw) do
+  try do
+    # Aktualizuj status na :running
+    simulation = Repo.update!(Ecto.Changeset.change(simulation, %{
+      status: :running,
+      started_at: DateTime.utc_now()
+    }))
+
+    # Parametry
+    max_attempts = simulation.options["max_attempts"] || 1_000_000
+    timeout_seconds = simulation.options["timeout_seconds"] || 300
+    start_time = System.monotonic_time(:second)
+
+    # Inicjalizuj kontroler duplikatów
+    duplicate_controller = SimulationDuplicateController.new()
+
+    # Główna pętla symulacji
+    result = simulate_until_match(
+      strategy.rules,
+      target_draw.numbers,
+      max_attempts,
+      timeout_seconds,
+      start_time,
+      duplicate_controller
+    )
+
+    # Zapisz wynik z uwzględnieniem duplikatów
+    finalize_simulation(simulation, result, start_time)
+  rescue
+    e ->
+      Logger.error("Simulation error: #{inspect(e)}")
+
+      Repo.update!(Ecto.Changeset.change(simulation, %{
+        status: :error,
+        result: %{"reason" => "error", "error_message" => Exception.message(e)},
+        completed_at: DateTime.utc_now()
+      }))
+  end
+end
+```
+
+#### Aktualizacja `finalize_simulation/4`
+
+```elixir
+defp finalize_simulation(simulation, result, start_time) do
+  duration = System.monotonic_time(:second) - start_time
+
+  case result do
+    {:success, attempts, matched, controller} ->
+      stats = SimulationDuplicateController.get_stats(controller)
+
+      Repo.update!(Ecto.Changeset.change(simulation, %{
+        status: :success,
+        attempts_count: attempts,
+        duration_seconds: duration,
+        result: %{
+          "matched_main" => matched[:main],
+          "matched_euro" => matched[:euro],
+          "attempts_count" => attempts,
+          "final_draw" => target_draw.numbers,
+          "duplicates_skipped" => stats.duplicates_skipped,
+          "unique_attempts" => attempts
+        },
+        completed_at: DateTime.utc_now()
+      }))
+
+      # Zaktualizuj performance score strategii
+      update_strategy_performance(simulation.strategy_id)
+
+    {:timeout, reason, attempts, controller} ->
+      stats = SimulationDuplicateController.get_stats(controller)
+
+      Repo.update!(Ecto.Changeset.change(simulation, %{
+        status: :timeout,
+        attempts_count: attempts,
+        duration_seconds: duration,
+        result: %{
+          "reason" => "timeout",
+          "limit_reached" => reason,
+          "attempts_count" => attempts,
+          "duplicates_skipped" => stats.duplicates_skipped,
+          "unique_attempts" => attempts
+        },
+        completed_at: DateTime.utc_now()
+      }))
+  end
+end
+```
+
+### Korzyści mechanizmu
+
+#### Wydajność
+- **Oszczędność pamięci**: MapSet zapewnia O(1) sprawdzanie duplikatów
+- **Optymalizacja CPU**: Unikanie redundantnych sprawdzeń trafień dla tych samych kombinacji
+- **Skalowalność**: Mechanizm działa efektywnie nawet przy milionach prób
+
+#### Dokładność wyników
+- **Czyste statystyki**: `attempts_count` odzwierciedla rzeczywistą liczbę unikalnych prób
+- **Realistyczna symulacja**: Każda kombinacja jest testowana dokładnie raz
+- **Przewidywalne zachowanie**: Deterministyczne wyniki dla tych samych parametrów
+
+#### Bezpieczeństwo
+- **Deterministyczny hash**: MD5 zapewnia spójne identyfikatory kombinacji
+- **Izolacja symulacji**: Każda symulacja ma własny kontroler duplikatów
+- **Thread-safe**: Brak współdzielonego stanu między symulacjami
+
+### Rozszerzenia mechanizmu
+
+#### Opcjonalne logowanie duplikatów (debug mode)
+
+```elixir
+# W SimulationDuplicateController
+def check_attempt(%__MODULE__{} = controller, %{main: main, euro: euro}, debug_mode \\ false) do
+  combination_hash = generate_combination_hash(main, euro)
+
+  if MapSet.member?(controller.attempts_set, combination_hash) do
+    if debug_mode do
+      Logger.debug("Duplicate attempt skipped: main=#{inspect(main)}, euro=#{inspect(euro)}")
+    end
+
+    {:duplicate, %__MODULE__{
+      controller |
+      duplicates_count: controller.duplicates_count + 1
+    }}
+  else
+    {:unique, %__MODULE__{
+      controller |
+      attempts_set: MapSet.put(controller.attempts_set, combination_hash)
+    }}
+  end
+end
+```
+
+#### Statystyki szczegółowe
+
+```elixir
+# Rozszerzone statystyki dla analizy
+def get_detailed_stats(%__MODULE__{} = controller) do
+  %{
+    duplicates_skipped: controller.duplicates_count,
+    unique_attempts: MapSet.size(controller.attempts_set),
+    total_attempts: controller.duplicates_count + MapSet.size(controller.attempts_set),
+    duplicate_ratio: controller.duplicates_count / max(1, MapSet.size(controller.attempts_set))
+  }
+end
+```
+
+### Testowanie mechanizmu
+
+#### Testy jednostkowe
+
+```elixir
+describe "SimulationDuplicateController" do
+  test "detects duplicate attempts correctly" do
+    controller = SimulationDuplicateController.new()
+
+    attempt1 = %{main: [1, 7, 23, 34, 50], euro: [3, 9]}
+    attempt2 = %{main: [1, 7, 23, 34, 50], euro: [3, 9]} # duplikat
+    attempt3 = %{main: [2, 8, 24, 35, 49], euro: [4, 10]} # unikalny
+
+    # Pierwsza próba - unikalna
+    assert {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt1)
+    assert MapSet.size(controller.attempts_set) == 1
+
+    # Druga próba - duplikat
+    assert {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, attempt2)
+    assert MapSet.size(controller.attempts_set) == 1
+    assert controller.duplicates_count == 1
+
+    # Trzecia próba - unikalna
+    assert {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt3)
+    assert MapSet.size(controller.attempts_set) == 2
+    assert controller.duplicates_count == 1
+  end
+
+  test "generates consistent hashes" do
+    attempt1 = %{main: [1, 7, 23, 34, 50], euro: [3, 9]}
+    attempt2 = %{main: [34, 1, 50, 23, 7], euro: [9, 3]} # te same liczby, inna kolejność
+
+    hash1 = SimulationDuplicateController.generate_combination_hash(attempt1.main, attempt1.euro)
+    hash2 = SimulationDuplicateController.generate_combination_hash(attempt2.main, attempt2.euro)
+
+    assert hash1 == hash2
+  end
+end
+```
+
+#### Testy integracyjne
+
+```elixir
+test "simulation skips duplicates without affecting attempt count" do
+  # Mock NumberGenerator zwracający zawsze tę samą kombinację
+  # Sprawdź że attempts_count = 1, duplicates_skipped = max_attempts - 1
+end
+```
+
 ## 6. Zarządzanie stanem
 
 **Architektura stanu**: Centralne zarządzanie w `PageLive`, komponenty bezstanowe.

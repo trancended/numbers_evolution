@@ -214,7 +214,7 @@ defmodule NumbersEvolution.Strategies do
     strategy = get_strategy!(user, id)
 
     strategy
-    |> Strategy.changeset(%{status: :deleted})
+    |> Ecto.Changeset.change(status: "deleted")
     |> Repo.update()
   end
 

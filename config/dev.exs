@@ -1,5 +1,23 @@
 import Config
 
+# Load environment variables from .env file
+env_file_path = Path.expand(".env", File.cwd!())
+
+if File.exists?(env_file_path) do
+  env_file_path
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.each(fn line ->
+    case String.split(line, "=", parts: 2) do
+      [key, value] ->
+        System.put_env(key, value)
+
+      _ ->
+        :ok
+    end
+  end)
+end
+
 # Configure your database
 config :numbers_evolution, NumbersEvolution.Repo,
   username: "postgres",

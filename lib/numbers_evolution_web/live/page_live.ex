@@ -43,6 +43,10 @@ defmodule NumbersEvolutionWeb.PageLive do
       |> assign(:register_form, to_form(%{}, as: :user))
       |> assign(:login_form, to_form(%{}, as: :user))
       |> assign(:live_attempts, %{})
+      |> assign(:selected_strategy, nil)
+      |> assign(:strategy_pools, %{})
+      |> assign(:target_validation_error, nil)
+      |> assign(:half_random_mode, false)
       |> initialize_section_data(current_user)
       |> load_dashboard_data_if_user(current_user)
       |> subscribe_to_running_simulations(current_user)
@@ -240,18 +244,28 @@ defmodule NumbersEvolutionWeb.PageLive do
   def handle_event("delete_strategy", %{"id" => id}, socket) do
     user = socket.assigns.current_user
 
-    try do
-      case Strategies.delete_strategy(user, id) do
-        {:ok, _} ->
-          {:noreply,
-           socket
-           |> put_flash(:info, "Strategia została usunięta")
-           |> load_strategies()}
-      end
-    rescue
-      Ecto.NoResultsError ->
-        {:noreply, put_flash(socket, :error, "Nie znaleziono strategii")}
+    case Strategies.delete_strategy(user, id) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Strategia została usunięta")
+         |> load_strategies()}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Błąd podczas usuwania strategii: #{inspect(changeset.errors)}"
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Błąd podczas usuwania strategii: #{inspect(reason)}")}
     end
+  rescue
+    Ecto.NoResultsError ->
+      {:noreply, put_flash(socket, :error, "Nie znaleziono strategii")}
   end
 
   @impl true
@@ -270,6 +284,71 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   # Simulations section events
   @impl true
+  def handle_event("strategy_changed", %{"strategy_id" => strategy_id}, socket) do
+    if strategy_id != "" do
+      strategy = Strategies.get_strategy!(socket.assigns.current_user, strategy_id)
+      half_random_mode = socket.assigns.half_random_mode
+      pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_mode)
+
+      socket
+      |> assign(:selected_strategy, strategy)
+      |> assign(:strategy_pools, pools)
+      |> assign(:target_validation_error, nil)
+    else
+      socket
+      |> assign(:selected_strategy, nil)
+      |> assign(:strategy_pools, %{})
+      |> assign(:target_validation_error, nil)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("half_random_mode_changed", %{"half_random_mode" => half_random_mode}, socket) do
+    half_random_enabled = half_random_mode == "true"
+
+    socket =
+      socket
+      |> assign(:half_random_mode, half_random_enabled)
+
+    # Update strategy pools if strategy is selected
+    socket =
+      if socket.assigns[:selected_strategy] do
+        strategy = socket.assigns.selected_strategy
+        pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_enabled)
+
+        socket
+        |> assign(:strategy_pools, pools)
+        |> assign(:target_validation_error, nil)
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("target_draw_changed", %{"target_draw_id" => target_draw_id}, socket) do
+    if target_draw_id != "" and socket.assigns[:selected_strategy] do
+      target_draw = Draws.get_draw!(target_draw_id)
+      _strategy = socket.assigns.selected_strategy
+      pools = socket.assigns.strategy_pools
+
+      validation_result = validate_target_in_strategy_pools(target_draw, pools)
+
+      case validation_result do
+        {:error, reason} ->
+          assign(socket, :target_validation_error, reason)
+
+        :ok ->
+          assign(socket, :target_validation_error, nil)
+      end
+    else
+      assign(socket, :target_validation_error, nil)
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("start_simulation", params, socket) do
     user = socket.assigns.current_user
 
@@ -640,7 +719,9 @@ defmodule NumbersEvolutionWeb.PageLive do
   end
 
   @impl true
-  def handle_event("use_example_prompt", %{"prompt" => prompt}, socket) do
+  def handle_event("use_strategy_template", %{"strategy" => strategy_name}, socket) do
+    prompt = NumbersEvolution.Strategies.OpenRouterService.build_strategy_prompt(strategy_name)
+
     {:noreply,
      socket
      |> assign(:show_strategy_form, true)
@@ -667,6 +748,8 @@ defmodule NumbersEvolutionWeb.PageLive do
     |> assign(:show_strategy_form, false)
     |> assign(:strategy_form_tab, :ai)
     |> assign(:selected_strategies, [])
+    |> assign(:selected_strategy, nil)
+    |> assign(:target_validation_error, nil)
     |> assign(:generated_coupons, [])
     |> assign(:generated_strategy, nil)
     |> assign(:example_prompt, "")
@@ -736,6 +819,8 @@ defmodule NumbersEvolutionWeb.PageLive do
     |> assign(:simulations, simulations)
     |> assign(:draws, draws)
     |> assign(:strategy_pools, strategy_pools)
+    |> assign(:selected_strategy, nil)
+    |> assign(:target_validation_error, nil)
   end
 
   # ============================================================================
@@ -928,6 +1013,8 @@ defmodule NumbersEvolutionWeb.PageLive do
                 draws={@draws}
                 live_attempts={@live_attempts}
                 strategy_pools={assigns[:strategy_pools] || %{}}
+                selected_strategy={@selected_strategy}
+                target_validation_error={@target_validation_error}
               />
             <% :ranking -> %>
               <.ranking_section strategies={@strategies} />
@@ -1006,7 +1093,7 @@ defmodule NumbersEvolutionWeb.PageLive do
                 type="number"
                 label="Nowy timeout (sekundy)"
                 min="10"
-                max="36000"
+                max="86400"
                 required
               />
               <p class="text-sm text-base-content/70 mt-2">
@@ -1036,5 +1123,53 @@ defmodule NumbersEvolutionWeb.PageLive do
       <% end %>
     </div>
     """
+  end
+
+  # ============================================================================
+  # Private Helpers - Simulation Validation
+  # ============================================================================
+
+  @doc """
+  Validates if target draw numbers exist in strategy pools.
+
+  Returns :ok if all target numbers are available in strategy pools,
+  or {:error, reason} with suggestion to reset strategy.
+  """
+  @spec validate_target_in_strategy_pools(Draw.t(), map()) :: :ok | {:error, String.t()}
+  def validate_target_in_strategy_pools(target_draw, strategy_pools) do
+    main_target = target_draw.numbers.main_numbers
+    euro_target = target_draw.numbers.euro_numbers
+
+    main_pools = strategy_pools.main_numbers
+    euro_pools = strategy_pools.euro_numbers
+
+    # Check main numbers
+    missing_main =
+      Enum.filter(main_target, fn num ->
+        not (num in main_pools.hot or num in main_pools.cold or num in main_pools.random)
+      end)
+
+    # Check euro numbers
+    missing_euro =
+      Enum.filter(euro_target, fn num ->
+        not (num in euro_pools.hot or num in euro_pools.random)
+      end)
+
+    cond do
+      not Enum.empty?(missing_main) and not Enum.empty?(missing_euro) ->
+        {:error,
+         "Poszukiwane liczby główne #{Enum.join(missing_main, ", ")} oraz euro #{Enum.join(missing_euro, ", ")} nie istnieją w komplecie strategii. Rozważ reset strategii."}
+
+      not Enum.empty?(missing_main) ->
+        {:error,
+         "Poszukiwane liczby główne #{Enum.join(missing_main, ", ")} nie istnieją w komplecie strategii. Rozważ reset strategii."}
+
+      not Enum.empty?(missing_euro) ->
+        {:error,
+         "Poszukiwane liczby euro #{Enum.join(missing_euro, ", ")} nie istnieją w komplecie strategii. Rozważ reset strategii."}
+
+      true ->
+        :ok
+    end
   end
 end

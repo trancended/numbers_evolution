@@ -66,12 +66,39 @@ const SetTextareaValue = {
       this.el.value = value
     }
   },
-  
+
   updated() {
     const value = this.el.dataset.value
     if (value) {
       this.el.value = value
     }
+  }
+}
+
+// Confirm delete hook
+const ConfirmDelete = {
+  mounted() {
+    this.el.addEventListener('click', (e) => {
+      const message = this.el.dataset.confirm || 'Czy na pewno chcesz to zrobić?'
+      if (!confirm(message)) {
+        e.preventDefault()
+        e.stopPropagation()
+        return false
+      }
+    })
+  }
+}
+
+// Half random mode checkbox hook
+const HalfRandomMode = {
+  mounted() {
+    this.el.addEventListener('change', (e) => {
+      const isChecked = e.target.checked
+      console.log('Half random mode changed:', isChecked)
+
+      // Send event to LiveView
+      this.pushEvent('half_random_mode_changed', { half_random_mode: isChecked ? 'true' : 'false' })
+    })
   }
 }
 
@@ -81,7 +108,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: {
     ...colocatedHooks,
     AutoHideFlash: AutoHideFlash,
-    SetTextareaValue: SetTextareaValue
+    SetTextareaValue: SetTextareaValue,
+    ConfirmDelete: ConfirmDelete,
+    HalfRandomMode: HalfRandomMode
   },
 })
 

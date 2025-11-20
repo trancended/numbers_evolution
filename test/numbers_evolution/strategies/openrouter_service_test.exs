@@ -98,11 +98,72 @@ defmodule NumbersEvolution.Strategies.OpenRouterServiceTest do
     end
   end
 
-  describe "integration tests" do
-    test "full generation flow with mocked API" do
-      # This would require mocking Req, which is complex
-      # For now, we test the validation and error handling
-      assert :ok
+  describe "build_strategy_prompt/1" do
+    test "generates detailed prompt for 'tylko_nieparzyste'" do
+      prompt = OpenRouterService.build_strategy_prompt("tylko_nieparzyste")
+
+      assert String.contains?(prompt, "eurojackpot")
+      assert String.contains?(prompt, "parzyste liczby główne")
+      assert String.contains?(prompt, "nieparzystych liczbach")
+      assert String.contains?(prompt, "ratio parzystych/nieparzystych 0:5")
+      assert String.contains?(prompt, "niskie/wysokie 3:2")
+      assert String.contains?(prompt, "wagi 50% hot i 50% random")
+    end
+
+    test "generates detailed prompt for 'dwie_nieparzyste_trzy_parzyste'" do
+      prompt = OpenRouterService.build_strategy_prompt("dwie_nieparzyste_trzy_parzyste")
+
+      assert String.contains?(prompt, "precyzyjnym ratio parzystości")
+      assert String.contains?(prompt, "2 nieparzyste i 3 parzyste")
+      assert String.contains?(prompt, "ratio parzystych/nieparzystych 3:2")
+      assert String.contains?(prompt, "gorące liczby 7,15,23,34,42")
+    end
+
+    test "generates detailed prompt for 'max_dwie_w_dziesiatce'" do
+      prompt = OpenRouterService.build_strategy_prompt("max_dwie_w_dziesiatce")
+
+      assert String.contains?(prompt, "ograniczeniami dystrybucyjnymi")
+      assert String.contains?(prompt, "maksymalnie 2 liczby w jednej dziesiątce")
+      assert String.contains?(prompt, "całkowity zakaz kolejnych liczb")
+      assert String.contains?(prompt, "maksymalnie 2 liczby z dekady")
+      assert String.contains?(prompt, "maksymalnie 1 kolejna liczba")
+    end
+
+    test "generates detailed prompt for unknown strategy" do
+      prompt = OpenRouterService.build_strategy_prompt("unknown_strategy")
+
+      assert String.contains?(prompt, "zrównoważoną strategię")
+      assert String.contains?(prompt, "gorące i losowe liczby")
+      assert String.contains?(prompt, "proporcjach około 40% hot i 60% random")
+    end
+  end
+
+  describe "fallback to mock" do
+    test "falls back to mock when API key is missing" do
+      # Temporarily clear API key
+      original_config = Application.get_env(:numbers_evolution, :openrouter)
+
+      Application.put_env(
+        :numbers_evolution,
+        :openrouter,
+        Map.put(original_config || %{}, :api_key, nil)
+      )
+
+      valid_prompt = "Create a strategy with hot numbers"
+      result = OpenRouterService.generate_strategy(valid_prompt)
+
+      # Restore config
+      if original_config do
+        Application.put_env(:numbers_evolution, :openrouter, original_config)
+      else
+        Application.delete_env(:numbers_evolution, :openrouter)
+      end
+
+      # Should fallback to mock and return a strategy
+      assert {:ok, strategy} = result
+      assert is_map(strategy)
+      assert Map.has_key?(strategy, :strategy_name)
+      assert Map.has_key?(strategy, :rules)
     end
   end
 end

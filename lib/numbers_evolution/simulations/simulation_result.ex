@@ -14,7 +14,9 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
           reason: String.t() | nil,
           limit_reached: String.t() | nil,
           error_message: String.t() | nil,
-          final_draw: final_draw() | nil
+          final_draw: final_draw() | nil,
+          duplicates_skipped: integer() | nil,
+          unique_attempts: integer() | nil
         }
 
   @type final_draw :: %{
@@ -34,6 +36,10 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
     field :limit_reached, :string
     field :error_message, :string
 
+    # Duplicate tracking fields
+    field :duplicates_skipped, :integer
+    field :unique_attempts, :integer
+
     embeds_one :final_draw, FinalDraw, primary_key: false do
       field :main_numbers, {:array, :integer}
       field :euro_numbers, {:array, :integer}
@@ -45,10 +51,18 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
   """
   def success_changeset(result, attrs) do
     result
-    |> cast(attrs, [:matched_main, :matched_euro, :attempts_count])
+    |> cast(attrs, [
+      :matched_main,
+      :matched_euro,
+      :attempts_count,
+      :duplicates_skipped,
+      :unique_attempts
+    ])
     |> validate_required([:matched_main, :matched_euro, :attempts_count])
     |> cast_embed(:final_draw, required: true, with: &final_draw_changeset/2)
     |> validate_number(:attempts_count, greater_than: 0)
+    |> validate_number(:duplicates_skipped, greater_than_or_equal_to: 0)
+    |> validate_number(:unique_attempts, greater_than: 0)
   end
 
   @doc """
@@ -56,10 +70,19 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
   """
   def timeout_changeset(result, attrs) do
     result
-    |> cast(attrs, [:reason, :limit_reached, :attempts_count, :error_message])
+    |> cast(attrs, [
+      :reason,
+      :limit_reached,
+      :attempts_count,
+      :error_message,
+      :duplicates_skipped,
+      :unique_attempts
+    ])
     |> validate_required([:reason, :limit_reached])
     |> validate_inclusion(:reason, ~w(timeout error))
     |> validate_inclusion(:limit_reached, ~w(max_attempts time_limit))
+    |> validate_number(:duplicates_skipped, greater_than_or_equal_to: 0)
+    |> validate_number(:unique_attempts, greater_than_or_equal_to: 0)
   end
 
   @doc """

@@ -17,6 +17,7 @@ defmodule NumbersEvolution.AIProvider.Mock do
       &match_ekstremalna_hot/1,
       &match_przeciwny_trend/1,
       &match_balans_hot_cold/1,
+      &match_complex_skip_half_max2_decade_3odd_2even/1,
       &match_tylko_nieparzyste/1,
       &match_2_nieparzyste_3_parzyste/1,
       &match_max_2_w_dziesiatce/1,
@@ -36,9 +37,22 @@ defmodule NumbersEvolution.AIProvider.Mock do
   # Matcher functions - each returns strategy map or nil
 
   defp match_tylko_nieparzyste(normalized_prompt) do
-    if String.contains?(normalized_prompt, "nieparzyste") and
-         (String.contains?(normalized_prompt, "pomin") or
-            String.contains?(normalized_prompt, "parzyste")) do
+    # Match prompts that want ONLY odd numbers, not complex combinations
+    # Must contain "tylko" or "same" and "nieparzyste", but no other constraints
+    has_only_modifier =
+      String.contains?(normalized_prompt, "tylko") or
+        String.contains?(normalized_prompt, "same") or
+        String.contains?(normalized_prompt, "wyłącznie")
+
+    has_constraints =
+      String.contains?(normalized_prompt, "max ") or
+        String.contains?(normalized_prompt, "dziesiąt") or
+        String.contains?(normalized_prompt, "połow") or
+        String.contains?(normalized_prompt, "3 ") or
+        String.contains?(normalized_prompt, "dwie")
+
+    if has_only_modifier and String.contains?(normalized_prompt, "nieparzyste") and
+         not has_constraints do
       strategy_tylko_nieparzyste()
     end
   end
@@ -92,6 +106,19 @@ defmodule NumbersEvolution.AIProvider.Mock do
   defp match_pelna_losowosc(normalized_prompt) do
     if String.contains?(normalized_prompt, "losow") do
       strategy_pelna_losowosc()
+    end
+  end
+
+  defp match_complex_skip_half_max2_decade_3odd_2even(normalized_prompt) do
+    if String.contains?(normalized_prompt, "pomin") and
+         String.contains?(normalized_prompt, "połow") and
+         (String.contains?(normalized_prompt, "max 2") or
+            String.contains?(normalized_prompt, "dziesiąt")) and
+         String.contains?(normalized_prompt, "3") and
+         String.contains?(normalized_prompt, "nieparzyste") and
+         String.contains?(normalized_prompt, "dwie") and
+         String.contains?(normalized_prompt, "parzyste") do
+      strategy_complex_skip_half_max2_decade_3odd_2even()
     end
   end
 
@@ -317,6 +344,35 @@ defmodule NumbersEvolution.AIProvider.Mock do
           "ratio_even_odd" => [1, 1],
           "preferred" => [],
           "weights" => %{"hot" => 0.0, "random" => 1.0}
+        }
+      }
+    }
+  end
+
+  # Strategia 8: Pomin Połowę + Max 2 w Dziesiątce + 3 Nieparzyste 2 Parzyste
+  defp strategy_complex_skip_half_max2_decade_3odd_2even do
+    %{
+      strategy_name: "Pomin Połowę + Max 2 w Dziesiątce + 3 Nieparzyste 2 Parzyste",
+      description:
+        "Złożona strategia: pominięcie połowy losowych liczb, maksymalnie 2 liczby w jednej dziesiątce oraz dokładnie 3 nieparzyste i 2 parzyste liczby główne.",
+      reasoning:
+        "Strategia łączy ograniczenia dystrybucji (max 2 w dziesiątce) z precyzyjnym ratio parzystości (3 nieparzyste, 2 parzyste) i redukcją puli liczb poprzez wyższe wagi na hot numbers (50%) i niższe na random (30%).",
+      rules: %{
+        "main_numbers" => %{
+          "blacklist" => [],
+          "ratio_even_odd" => [2, 3],
+          "ratio_low_high" => [3, 2],
+          "preferred_hot" => [],
+          "preferred_cold" => [],
+          "weights" => %{"hot" => 0.5, "cold" => 0.2, "random" => 0.3},
+          "max_per_decade" => 2,
+          "max_consecutive" => 5
+        },
+        "euro_numbers" => %{
+          "blacklist" => [],
+          "ratio_even_odd" => [1, 1],
+          "preferred" => [],
+          "weights" => %{"hot" => 0.5, "random" => 0.5}
         }
       }
     }

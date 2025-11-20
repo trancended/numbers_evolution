@@ -18,6 +18,8 @@ defmodule NumbersEvolution.Client.OpenRouterClient do
         rate_limit_per_hour: 100
   """
 
+  require Logger
+
   @doc """
   Makes a chat completion request to OpenRouter API.
 
@@ -43,14 +45,57 @@ defmodule NumbersEvolution.Client.OpenRouterClient do
       {"Content-Type", "application/json"}
     ]
 
-    Req.post("#{base_url}/chat/completions",
-      headers: headers,
-      json: payload,
-      receive_timeout: timeout
+    # Log the request
+    Logger.info("[OpenRouter] Sending chat completion request to #{base_url}/chat/completions",
+      payload_size: byte_size(Jason.encode!(payload)),
+      model: payload["model"],
+      messages_count: length(payload["messages"] || []),
+      timeout: timeout
     )
+
+    start_time = System.monotonic_time(:millisecond)
+
+    result =
+      Req.post("#{base_url}/chat/completions",
+        headers: headers,
+        json: payload,
+        receive_timeout: timeout
+      )
+|> IO.inspect(label: "result")
+    duration = System.monotonic_time(:millisecond) - start_time
+
+    # Log the response
+    case result do
+      {:ok, %{status: status, body: body}} ->
+        Logger.info("[OpenRouter] Received response",
+          status: status,
+          duration_ms: duration,
+          response_size: byte_size(Jason.encode!(body))
+        )
+
+        if status >= 400 do
+          Logger.warning("[OpenRouter] API error response",
+            status: status,
+            error_body: inspect(body, limit: 500)
+          )
+        end
+
+      {:error, error} ->
+        Logger.error("[OpenRouter] Request failed",
+          duration_ms: duration,
+          error: inspect(error, limit: 500)
+        )
+    end
+
+    result
     |> handle_api_response()
   rescue
-    _ -> {:error, :api_key_missing}
+    exception ->
+      Logger.error("[OpenRouter] Unexpected error in chat_completion",
+        error: inspect(exception, limit: 500)
+      )
+
+      {:error, :api_key_missing}
   end
 
   @doc """
@@ -75,19 +120,52 @@ defmodule NumbersEvolution.Client.OpenRouterClient do
       {"Content-Type", "application/json"}
     ]
 
-    case Req.get("#{base_url}/models", headers: headers, receive_timeout: timeout) do
+    # Log the request
+    Logger.info("[OpenRouter] Requesting models list from #{base_url}/models",
+      timeout: timeout
+    )
+
+    start_time = System.monotonic_time(:millisecond)
+
+    result = Req.get("#{base_url}/models", headers: headers, receive_timeout: timeout)
+
+    duration = System.monotonic_time(:millisecond) - start_time
+
+    case result do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         model_names = Enum.map(models, & &1["id"])
+
+        Logger.info("[OpenRouter] Successfully retrieved models list",
+          duration_ms: duration,
+          models_count: length(model_names)
+        )
+
         {:ok, model_names}
 
-      {:ok, %{status: status}} when status >= 400 ->
+      {:ok, %{status: status, body: body}} when status >= 400 ->
+        Logger.warning("[OpenRouter] Models API error",
+          status: status,
+          duration_ms: duration,
+          error_body: inspect(body, limit: 500)
+        )
+
         {:error, :api_error}
 
-      {:error, _} ->
+      {:error, error} ->
+        Logger.error("[OpenRouter] Models request failed",
+          duration_ms: duration,
+          error: inspect(error, limit: 500)
+        )
+
         {:error, :network_error}
     end
   rescue
-    _ -> {:error, :unexpected_error}
+    exception ->
+      Logger.error("[OpenRouter] Unexpected error in list_models",
+        error: inspect(exception, limit: 500)
+      )
+
+      {:error, :unexpected_error}
   end
 
   @doc """

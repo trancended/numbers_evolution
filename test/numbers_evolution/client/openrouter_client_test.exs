@@ -1,4 +1,4 @@
-defmodule NumbersEvolution.Client.OpenRouterClientTest do
+defmodule NumbersEvolution.Client.OpenRouterClientHTTPTest do
   use NumbersEvolution.DataCase, async: true
 
   alias NumbersEvolution.Client.OpenRouterClient
@@ -70,7 +70,12 @@ defmodule NumbersEvolution.Client.OpenRouterClientTest do
     test "returns error when API key is missing" do
       # Temporarily clear API key
       original_config = Application.get_env(:numbers_evolution, :openrouter)
-      Application.put_env(:numbers_evolution, :openrouter, Map.put(original_config || %{}, :api_key, nil))
+
+      Application.put_env(
+        :numbers_evolution,
+        :openrouter,
+        Map.put(original_config || %{}, :api_key, nil)
+      )
 
       result = OpenRouterClient.validate_config()
 

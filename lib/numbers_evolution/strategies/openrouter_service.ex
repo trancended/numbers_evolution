@@ -17,7 +17,8 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
 
   # Rate limiting constants
   @max_generations_per_day 5
-  @rate_limit_window_ms 86_400_000  # 24 hours
+  # 24 hours
+  @rate_limit_window_ms 86_400_000
 
   # API constants
   @default_system_message """
@@ -28,36 +29,132 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
     "name": "Strategy Name (max 100 chars)",
     "type": "ai_generated",
     "rules": {
-      "weights": {
-        "hot": 0.0-1.0,
-        "cold": 0.0-1.0,
-        "random": 0.0-1.0
+      "main_numbers": {
+        "ratio_even_odd": [even_count, odd_count],
+        "ratio_low_high": [low_count, high_count],
+        "preferred_hot": [array_of_hot_numbers],
+        "preferred_cold": [array_of_cold_numbers],
+        "weights": {"hot": 0.0-1.0, "cold": 0.0-1.0, "random": 0.0-1.0},
+        "max_per_decade": 1-5,
+        "max_consecutive": 1-5,
+        "blacklist": []
+      },
+      "euro_numbers": {
+        "ratio_even_odd": [even_count, odd_count],
+        "preferred": [array_of_preferred_numbers],
+        "weights": {"hot": 0.0-1.0, "random": 0.0-1.0},
+        "blacklist": []
       }
     }
   }
 
-  The weights must sum to exactly 1.0. Do not include any other text or explanation.
+  Guidelines:
+  - Weights must sum to exactly 1.0
+  - ratio_even_odd: [even, odd] where even + odd = 5 for main, = 2 for euro
+  - ratio_low_high: [low, high] where low + high = 5, low = 1-25, high = 26-50
+  - max_per_decade: max numbers from one decade (1-10,11-20,etc.)
+  - max_consecutive: max consecutive numbers allowed
+  - preferred_hot/cold: specific numbers to favor/avoid (max 10 numbers each)
+  - Do not include any other text or explanation.
   """
 
   @response_schema %{
     "type" => "object",
+    "additionalProperties" => false,
     "properties" => %{
       "name" => %{"type" => "string", "maxLength" => 100},
       "type" => %{"type" => "string", "enum" => ["ai_generated"]},
       "rules" => %{
         "type" => "object",
+        "additionalProperties" => false,
         "properties" => %{
-          "weights" => %{
+          "main_numbers" => %{
             "type" => "object",
+            "additionalProperties" => false,
             "properties" => %{
-              "hot" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0},
-              "cold" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0},
-              "random" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0}
+              "ratio_even_odd" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 0, "maximum" => 5},
+                "minItems" => 2,
+                "maxItems" => 2
+              },
+              "ratio_low_high" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 0, "maximum" => 5},
+                "minItems" => 2,
+                "maxItems" => 2
+              },
+              "preferred_hot" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 50},
+                "maxItems" => 10
+              },
+              "preferred_cold" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 50},
+                "maxItems" => 10
+              },
+              "weights" => %{
+                "type" => "object",
+                "additionalProperties" => false,
+                "properties" => %{
+                  "hot" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0},
+                  "cold" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0},
+                  "random" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0}
+                },
+                "required" => ["hot", "cold", "random"]
+              },
+              "max_per_decade" => %{"type" => "integer", "minimum" => 1, "maximum" => 5},
+              "max_consecutive" => %{"type" => "integer", "minimum" => 1, "maximum" => 5},
+              "blacklist" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 50}
+              }
             },
-            "required" => ["hot", "cold", "random"]
+            "required" => [
+              "ratio_even_odd",
+              "ratio_low_high",
+              "preferred_hot",
+              "preferred_cold",
+              "weights",
+              "max_per_decade",
+              "max_consecutive",
+              "blacklist"
+            ]
+          },
+          "euro_numbers" => %{
+            "type" => "object",
+            "additionalProperties" => false,
+            "properties" => %{
+              "ratio_even_odd" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 0, "maximum" => 2},
+                "minItems" => 2,
+                "maxItems" => 2
+              },
+              "preferred" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 12},
+                "maxItems" => 5
+              },
+              "weights" => %{
+                "type" => "object",
+                "additionalProperties" => false,
+                "properties" => %{
+                  "hot" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0},
+                  "random" => %{"type" => "number", "minimum" => 0.0, "maximum" => 1.0}
+                },
+                "required" => ["hot", "random"]
+              },
+              "blacklist" => %{
+                "type" => "array",
+                "items" => %{"type" => "integer", "minimum" => 1, "maximum" => 12}
+              }
+            },
+            "required" => ["ratio_even_odd", "preferred", "weights", "blacklist"]
           }
         },
-        "required" => ["weights"]
+        "required" => ["main_numbers", "euro_numbers"]
       }
     },
     "required" => ["name", "type", "rules"]
@@ -93,6 +190,11 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
          rules: strategy_attrs["rules"]
        }}
     else
+      {:error, :api_key_missing} ->
+        # Fallback to mock when API key is missing
+        Logger.info("OpenRouter API key missing, falling back to mock implementation")
+        NumbersEvolution.AIProvider.Mock.generate_strategy(prompt)
+
       {:error, reason} ->
         Logger.warning("OpenRouter strategy generation failed: #{inspect(reason)}")
         {:error, reason}
@@ -133,6 +235,41 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
   end
 
   def validate_prompt(_), do: {:error, :invalid_prompt}
+
+  @doc """
+  Generates a detailed prompt based on strategy name.
+
+  ## Parameters
+  - `strategy_name`: Simple strategy identifier
+
+  ## Returns
+  - `String` - Full detailed prompt for AI
+  """
+  @spec build_strategy_prompt(String.t()) :: String.t()
+  def build_strategy_prompt(strategy_name) do
+    case strategy_name do
+      "tylko_nieparzyste" ->
+        "Utwórz strategię eurojackpot która całkowicie pomija wszystkie parzyste liczby główne (2,4,6,8,...50). Skup się wyłącznie na 25 nieparzystych liczbach (1,3,5,...49). Dla euro wszystkich liczb używaj normalnie. Strategia powinna mieć: ratio parzystych/nieparzystych 0:5 dla głównych, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot i 50% random, preferuj gorące liczby."
+
+      "dwie_nieparzyste_trzy_parzyste" ->
+        "Utwórz strategię eurojackpot z precyzyjnym ratio parzystości: dokładnie 2 nieparzyste i 3 parzyste liczby główne. Dla euro zachowaj balans 1:1. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot, 20% cold, 30% random, preferuj gorące liczby 7,15,23,34,42."
+
+      "max_dwie_w_dziesiatce" ->
+        "Utwórz strategię eurojackpot z ograniczeniami dystrybucyjnymi: maksymalnie 2 liczby w jednej dziesiątce (np. 1-10,11-20,etc.) i całkowity zakaz kolejnych liczb (np. nie 7,8). Skup się na gorących liczbach z ostatnich losowań. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 2 liczby z dekady, maksymalnie 1 kolejna liczba, wagi 60% hot, 20% cold, 20% random, preferuj gorące liczby 7,15,23,34,42."
+
+      "balans_hot_cold" ->
+        "Utwórz zrównoważoną strategię eurojackpot balansującą trendy i losowość. Połącz gorące i zimne liczby w proporcjach 40% hot, 20% cold, 40% random. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, preferuj gorące 7,23,34 i zimne 1,50, maksymalnie 10 preferowanych liczb każdego typu."
+
+      "ekstremalna_hot" ->
+        "Utwórz ekstremalną strategię eurojackpot skupiającą się maksymalnie na gorących liczbach z ostatnich 32 losowań. Całkowicie ignoruj zimne liczby. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, maksymalnie 3 kolejne liczby, wagi 80% hot, 0% cold, 20% random, preferuj 9 gorących liczb jak 7,12,18,23,28,34,39,42,47."
+
+      "przeciwny_trend" ->
+        "Utwórz strategię eurojackpot działającą odwrotnie do popularnych trendów - skup się na cold numbers (rzadko wypadających liczbach) z ostatnich 64 losowań. Strategia powinna zawierać: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 10% hot, 70% cold, 20% random, preferuj 9 zimnych liczb jak 1,5,13,17,25,31,41,45,50."
+
+      _ ->
+        "Utwórz zrównoważoną strategię eurojackpot balansującą gorące i losowe liczby w proporcjach około 40% hot i 60% random. Strategia powinna mieć odpowiednie proporcje parzystych/nieparzystych oraz niskich/wysokich liczb."
+    end
+  end
 
   @doc """
   Checks if user has exceeded rate limit for AI generation.
@@ -228,24 +365,52 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
 
   defp validate_response_schema(data) do
     # Basic validation - in production, consider using ExJsonSchema
+    with {:ok, _} <- validate_basic_structure(data),
+         :ok <- validate_main_numbers(data),
+         :ok <- validate_euro_numbers(data) do
+      :ok
+    else
+      _ -> {:error, :invalid_schema}
+    end
+  end
+
+  defp validate_basic_structure(data) do
     required_keys = ["name", "type", "rules"]
     has_required = Enum.all?(required_keys, &Map.has_key?(data, &1))
 
-    if has_required do
-      # Validate weights sum to 1.0
-      with %{"rules" => %{"weights" => weights}} <- data,
-           true <- is_map(weights),
-           true <-
-             Map.has_key?(weights, "hot") and Map.has_key?(weights, "cold") and
-               Map.has_key?(weights, "random"),
-           sum when sum >= 0.99 and sum <= 1.01 <-
-             weights["hot"] + weights["cold"] + weights["random"] do
-        :ok
-      else
-        _ -> {:error, :invalid_schema}
-      end
+    if has_required and data["type"] == "ai_generated" and is_map(data["rules"]) do
+      {:ok, data}
     else
-      {:error, :invalid_schema}
+      :error
+    end
+  end
+
+  defp validate_main_numbers(%{"rules" => %{"main_numbers" => main}}) do
+    # Validate ratio_even_odd sums to 5
+    with [even, odd] when even + odd == 5 <- main["ratio_even_odd"],
+         [low, high] when low + high == 5 <- main["ratio_low_high"],
+         %{"hot" => hot, "cold" => cold, "random" => random} <- main["weights"],
+         sum when sum >= 0.99 and sum <= 1.01 <- hot + cold + random,
+         max_decade when max_decade in 1..5 <- main["max_per_decade"],
+         max_consec when max_consec in 1..5 <- main["max_consecutive"],
+         true <- is_list(main["preferred_hot"]) and is_list(main["preferred_cold"]),
+         true <- is_list(main["blacklist"]) do
+      :ok
+    else
+      _ -> :error
+    end
+  end
+
+  defp validate_euro_numbers(%{"rules" => %{"euro_numbers" => euro}}) do
+    # Validate ratio_even_odd sums to 2
+    with [even, odd] when even + odd == 2 <- euro["ratio_even_odd"],
+         %{"hot" => hot, "random" => random} <- euro["weights"],
+         sum when sum >= 0.99 and sum <= 1.01 <- hot + random,
+         true <- is_list(euro["preferred"]),
+         true <- is_list(euro["blacklist"]) do
+      :ok
+    else
+      _ -> :error
     end
   end
 

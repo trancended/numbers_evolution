@@ -9,7 +9,7 @@ defmodule NumbersEvolution.Simulations do
   alias NumbersEvolution.Accounts.User
   alias NumbersEvolution.{Draws, Strategies}
   alias NumbersEvolution.Repo
-  alias NumbersEvolution.Simulations.Simulation
+  alias NumbersEvolution.Simulations.{Simulation, SimulationDuplicateController}
 
   ## Queries
 
@@ -158,7 +158,7 @@ defmodule NumbersEvolution.Simulations do
         "strategy_id" => "...",
         "target_draw_id" => "...",
         "max_attempts" => "10000",
-        "timeout_seconds" => "300"
+        "timeout_seconds" => "86400"
       })
       {:ok, %Simulation{}}
 
@@ -227,8 +227,8 @@ defmodule NumbersEvolution.Simulations do
         attrs = %{
           "strategy_id" => strategy_id,
           "target_draw_id" => target_draw_id,
-          "max_attempts" => get_in(options, ["max_attempts"]) || "1000000",
-          "timeout_seconds" => get_in(options, ["timeout_seconds"]) || "300"
+          "max_attempts" => get_in(options, ["max_attempts"]) || "999999999",
+          "timeout_seconds" => get_in(options, ["timeout_seconds"]) || "86400"
         }
 
         create_and_start_simulation(user, attrs)
@@ -274,7 +274,7 @@ defmodule NumbersEvolution.Simulations do
           "strategy_id" => strategy_id,
           "target_draw_id" => target_draw_id,
           "max_attempts" => max_attempts_str,
-          "timeout_seconds" => get_in(options, ["timeout_seconds"]) || "300"
+          "timeout_seconds" => get_in(options, ["timeout_seconds"]) || "86400"
         }
 
         create_and_start_simulation(user, attrs)
@@ -319,7 +319,7 @@ defmodule NumbersEvolution.Simulations do
         attrs = %{
           "strategy_id" => strategy_id,
           "target_draw_id" => target_draw_id,
-          "max_attempts" => get_in(options, ["max_attempts"]) || "1000000",
+          "max_attempts" => get_in(options, ["max_attempts"]) || "999999999",
           "timeout_seconds" => timeout_str
         }
 
@@ -429,11 +429,13 @@ defmodule NumbersEvolution.Simulations do
 
   defp parse_options(attrs) do
     max_attempts = parse_int(attrs["max_attempts"], 1_000_000)
-    timeout_seconds = parse_int(attrs["timeout_seconds"], 300)
+    timeout_seconds = parse_int(attrs["timeout_seconds"], 86_400)
+    half_random_mode = parse_boolean(attrs["half_random_mode"], false)
 
     %{
       "max_attempts" => max_attempts,
-      "timeout_seconds" => timeout_seconds
+      "timeout_seconds" => timeout_seconds,
+      "half_random_mode" => half_random_mode
     }
   end
 
@@ -449,6 +451,13 @@ defmodule NumbersEvolution.Simulations do
 
   defp parse_int(value, _default) when is_integer(value), do: value
   defp parse_int(_, default), do: default
+
+  defp parse_boolean(nil, default), do: default
+  defp parse_boolean("", default), do: default
+  defp parse_boolean(value, _default) when is_boolean(value), do: value
+  defp parse_boolean("true", _default), do: true
+  defp parse_boolean("false", _default), do: false
+  defp parse_boolean(_, default), do: default
 
   defp start_simulation_task(simulation, strategy, target_draw) do
     require Logger
@@ -527,11 +536,15 @@ defmodule NumbersEvolution.Simulations do
       # Get options from updated simulation
       options = updated_simulation.options || %{}
       max_attempts = Map.get(options, "max_attempts", 1_000_000)
-      timeout_seconds = Map.get(options, "timeout_seconds", 300)
+      timeout_seconds = Map.get(options, "timeout_seconds", 86_400)
 
       start_time = System.monotonic_time(:second)
 
+      # Inicjalizuj kontroler duplikatów
+      duplicate_controller = SimulationDuplicateController.new()
+
       # Run simulation loop
+      half_random_mode = Map.get(options, "half_random_mode", false)
       result =
         simulate_until_match(
           strategy,
@@ -539,12 +552,14 @@ defmodule NumbersEvolution.Simulations do
           max_attempts,
           timeout_seconds,
           start_time,
+          duplicate_controller,
           0,
-          simulation_id
+          simulation_id,
+          half_random_mode
         )
 
       # Finalize simulation
-      finalize_simulation(simulation_id, result, start_time, strategy)
+      finalize_simulation(simulation_id, result, start_time, strategy, duplicate_controller)
     rescue
       e ->
         Logger.error("Simulation #{simulation_id} crashed: #{inspect(e)}")
@@ -576,46 +591,151 @@ defmodule NumbersEvolution.Simulations do
          max_attempts,
          timeout_seconds,
          start_time,
+         duplicate_controller,
          current_attempt,
-         simulation_id
+         simulation_id,
+         half_random_mode
        ) do
-    # Check limits
+    # Check limits first
+    case check_simulation_limits(current_attempt, max_attempts, start_time, timeout_seconds) do
+      {:continue, _} ->
+        process_simulation_attempt(
+          strategy,
+          target_numbers,
+          max_attempts,
+          timeout_seconds,
+          start_time,
+          duplicate_controller,
+          current_attempt,
+          simulation_id,
+          half_random_mode
+        )
+
+      {:timeout, reason} ->
+        {:timeout, reason, current_attempt, duplicate_controller}
+    end
+  end
+
+  defp check_simulation_limits(current_attempt, max_attempts, start_time, timeout_seconds) do
     cond do
       current_attempt >= max_attempts ->
-        {:timeout, "max_attempts", current_attempt}
+        {:timeout, "max_attempts"}
 
       System.monotonic_time(:second) - start_time >= timeout_seconds ->
-        {:timeout, "time_limit", current_attempt}
+        {:timeout, "time_limit"}
 
       true ->
-        # Generate numbers according to strategy
-        case NumbersEvolution.Strategies.Generator.generate_numbers(strategy) do
-          {:ok, generated} ->
-            # Check if we matched the target
-            if matches_target?(generated, target_numbers) do
-              {:success, current_attempt + 1, generated}
-            else
-              # Broadcast progress every 1000 attempts for more frequent updates
-              # Also broadcast at the start (current_attempt == 0)
-              if rem(current_attempt, 1_000) == 0 || current_attempt == 0 do
-                broadcast_progress(simulation_id, current_attempt, start_time)
-              end
+        {:continue, nil}
+    end
+  end
 
-              # Continue simulation
-              simulate_until_match(
-                strategy,
-                target_numbers,
-                max_attempts,
-                timeout_seconds,
-                start_time,
-                current_attempt + 1,
-                simulation_id
-              )
-            end
+  defp process_simulation_attempt(
+         strategy,
+         target_numbers,
+         max_attempts,
+         timeout_seconds,
+         start_time,
+         duplicate_controller,
+         current_attempt,
+         simulation_id,
+         half_random_mode
+       ) do
+    case NumbersEvolution.Strategies.Generator.generate_numbers(strategy, half_random_mode: half_random_mode) do
+      {:ok, generated} ->
+        handle_generated_numbers(
+          generated,
+          strategy,
+          target_numbers,
+          max_attempts,
+          timeout_seconds,
+          start_time,
+          duplicate_controller,
+          current_attempt,
+          simulation_id,
+          half_random_mode
+        )
 
-          {:error, reason} ->
-            {:error, reason}
-        end
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp handle_generated_numbers(
+         generated,
+         strategy,
+         target_numbers,
+         max_attempts,
+         timeout_seconds,
+         start_time,
+         duplicate_controller,
+         current_attempt,
+         simulation_id,
+         half_random_mode
+       ) do
+    case SimulationDuplicateController.check_attempt(duplicate_controller, generated) do
+      {:duplicate, updated_controller} ->
+        # Skip duplicate - recursive call without incrementing attempt counter
+        simulate_until_match(
+          strategy,
+          target_numbers,
+          max_attempts,
+          timeout_seconds,
+          start_time,
+          updated_controller,
+          current_attempt,
+          simulation_id,
+          half_random_mode
+        )
+
+      {:unique, updated_controller} ->
+        handle_unique_attempt(
+          generated,
+          strategy,
+          target_numbers,
+          max_attempts,
+          timeout_seconds,
+          start_time,
+          updated_controller,
+          current_attempt,
+          simulation_id,
+          half_random_mode
+        )
+    end
+  end
+
+  defp handle_unique_attempt(
+         generated,
+         strategy,
+         target_numbers,
+         max_attempts,
+         timeout_seconds,
+         start_time,
+         duplicate_controller,
+         current_attempt,
+         simulation_id,
+         half_random_mode
+       ) do
+    if matches_target?(generated, target_numbers) do
+      {:success, current_attempt + 1, generated, duplicate_controller}
+    else
+      # Broadcast progress every 1000 attempts for more frequent updates
+      # Also broadcast at the start (current_attempt == 0)
+      if rem(current_attempt, 1_000) == 0 || current_attempt == 0 do
+        broadcast_progress(simulation_id, current_attempt, start_time)
+      end
+
+      # Continue simulation
+      simulate_until_match(
+        strategy,
+        target_numbers,
+        max_attempts,
+        timeout_seconds,
+        start_time,
+        duplicate_controller,
+        current_attempt + 1,
+        simulation_id,
+        half_random_mode
+      )
     end
   end
 
@@ -640,16 +760,21 @@ defmodule NumbersEvolution.Simulations do
     )
   end
 
-  defp finalize_simulation(simulation_id, result, start_time, strategy) do
+  defp finalize_simulation(simulation_id, result, start_time, strategy, duplicate_controller) do
     simulation = Repo.get!(Simulation, simulation_id)
     duration = System.monotonic_time(:second) - start_time
 
+    # Pobierz statystyki duplikatów
+    duplicate_stats = SimulationDuplicateController.get_stats(duplicate_controller)
+
     case result do
-      {:success, attempts, matched_numbers} ->
+      {:success, attempts, matched_numbers, _controller} ->
         result_data = %{
           matched_main: matched_numbers.main,
           matched_euro: matched_numbers.euro,
           attempts_count: attempts,
+          duplicates_skipped: duplicate_stats.duplicates_skipped,
+          unique_attempts: attempts,
           final_draw: %{
             main_numbers: matched_numbers.main,
             euro_numbers: matched_numbers.euro
@@ -667,13 +792,15 @@ defmodule NumbersEvolution.Simulations do
         # Update strategy performance score
         update_strategy_performance(strategy.id)
 
-      {:timeout, reason, attempts} ->
+      {:timeout, reason, attempts, _controller} ->
         status = if reason == "max_attempts", do: "max_attempts_reached", else: "timeout"
 
         result_data = %{
           reason: "timeout",
           limit_reached: reason,
-          attempts_count: attempts
+          attempts_count: attempts,
+          duplicates_skipped: duplicate_stats.duplicates_skipped,
+          unique_attempts: attempts
         }
 
         simulation
@@ -688,7 +815,9 @@ defmodule NumbersEvolution.Simulations do
         result_data = %{
           reason: "error",
           limit_reached: "error",
-          error_message: inspect(reason)
+          error_message: inspect(reason),
+          duplicates_skipped: duplicate_stats.duplicates_skipped,
+          unique_attempts: 0
         }
 
         simulation

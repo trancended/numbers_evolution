@@ -239,8 +239,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <div class="grid md:grid-cols-2 gap-2">
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Pomin połowę liczb od 1 do 50 (wszystkie parzyste). Skupimy się tylko na nieparzystych. Dla euro wszystkie liczby dostępne."
+              phx-click="use_strategy_template"
+              phx-value-strategy="tylko_nieparzyste"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -251,8 +251,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Dwie liczby główne mają być nieparzyste, reszta parzyste. Wagi: 50% hot, 30% random, 20% cold."
+              phx-click="use_strategy_template"
+              phx-value-strategy="dwie_nieparzyste_trzy_parzyste"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -263,8 +263,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Maksymalnie 2 liczby w jednej dziesiątce i nie mogą być kolejne (np. 7,8). Preferuj hot numbers z ostatnich 16 losowań."
+              phx-click="use_strategy_template"
+              phx-value-strategy="max_dwie_w_dziesiatce"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -275,8 +275,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Strategia balansująca hot i cold numbers z wagami 40% hot, 40% random, 20% cold. Ratio 3 parzyste/2 nieparzyste."
+              phx-click="use_strategy_template"
+              phx-value-strategy="balans_hot_cold"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -287,8 +287,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Strategia maksymalnie skupiona na hot numbers z ostatnich 32 losowań. Wagi: 80% hot, 20% random. Całkowicie ignoruj cold numbers."
+              phx-click="use_strategy_template"
+              phx-value-strategy="ekstremalna_hot"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -299,8 +299,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <button
               type="button"
-              phx-click="use_example_prompt"
-              phx-value-prompt="Strategia przeciwna do hot numbers - skupiamy się na liczbach cold (rzadko wypadających) z ostatnich 64 losowań. Wagi: 70% cold, 20% random, 10% hot."
+              phx-click="use_strategy_template"
+              phx-value-strategy="przeciwny_trend"
               class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
             >
               <div>
@@ -329,6 +329,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <input
           type="checkbox"
           phx-click="toggle_strategy_select"
+          phx-click.stop
           phx-value-id={@strategy.id}
           checked={@selected}
           class="checkbox checkbox-primary mt-1"
@@ -364,9 +365,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               <.icon name="hero-eye" class="size-4" /> Szczegóły
             </button>
             <button
+              id={"delete-strategy-#{@strategy.id}"}
+              type="button"
               phx-click="delete_strategy"
+              phx-click.stop
               phx-value-id={@strategy.id}
-              data-confirm="Czy na pewno usunąć tę strategię?"
+              phx-hook="ConfirmDelete"
               class="btn btn-sm btn-error"
             >
               <.icon name="hero-trash" class="size-4" /> Usuń
@@ -390,6 +394,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   attr :draws, :list, required: true
   attr :live_attempts, :map, default: %{}
   attr :strategy_pools, :map, default: %{}
+  attr :selected_strategy, :any, default: nil
+  attr :target_validation_error, :string, default: nil
 
   def simulations_section(assigns) do
     ~H"""
@@ -412,7 +418,13 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
           </.alert>
         <% else %>
-          <.simulation_form strategies={@strategies} draws={@draws} />
+          <.simulation_form
+            strategies={@strategies}
+            draws={@draws}
+            selected_strategy={@selected_strategy}
+            strategy_pools={@strategy_pools}
+            target_validation_error={@target_validation_error}
+          />
         <% end %>
       </.card>
 
@@ -441,6 +453,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
   attr :strategies, :list, required: true
   attr :draws, :list, required: true
+  attr :selected_strategy, :any, default: nil
+  attr :strategy_pools, :map, default: %{}
+  attr :target_validation_error, :string, default: nil
 
   defp simulation_form(assigns) do
     ~H"""
@@ -449,7 +464,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <label class="label">
           <span class="label-text">Wybierz strategię</span>
         </label>
-        <select name="strategy_id" class="select select-bordered" required>
+        <select
+          name="strategy_id"
+          class="select select-bordered"
+          required
+          phx-change="strategy_changed"
+        >
           <option value="" disabled selected>Wybierz strategię...</option>
           <%= for strategy <- @strategies do %>
             <option value={strategy.id}>{strategy.name}</option>
@@ -461,7 +481,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <label class="label">
           <span class="label-text">Target draw (losowanie docelowe)</span>
         </label>
-        <select name="target_draw_id" class="select select-bordered" required>
+        <select
+          name="target_draw_id"
+          class="select select-bordered"
+          required
+          phx-change="target_draw_changed"
+        >
           <option value="" disabled selected>Wybierz losowanie...</option>
           <%= for draw <- @draws do %>
             <option value={draw.id}>
@@ -473,6 +498,62 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <% end %>
         </select>
       </div>
+
+      <%= if @selected_strategy do %>
+        <div class="bg-base-200 p-4 rounded-lg">
+          <h4 class="font-semibold mb-2">Komplet liczb strategii "{@selected_strategy.name}"</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <div class="font-medium text-error mb-1">Główne liczby (1-50):</div>
+              <div class="space-y-1">
+                <div>
+                  <span class="font-medium">Hot:</span> {Enum.join(
+                    Enum.sort(@strategy_pools.main_numbers.hot),
+                    ", "
+                  )}
+                </div>
+                <div>
+                  <span class="font-medium">Cold:</span> {Enum.join(
+                    Enum.sort(@strategy_pools.main_numbers.cold),
+                    ", "
+                  )}
+                </div>
+                <div>
+                  <span class="font-medium">Random:</span> {length(
+                    @strategy_pools.main_numbers.random
+                  )} liczb (pozostałe)
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="font-medium text-warning mb-1">Liczby Euro (1-12):</div>
+              <div class="space-y-1">
+                <div>
+                  <span class="font-medium">Hot:</span> {Enum.join(
+                    Enum.sort(@strategy_pools.euro_numbers.hot),
+                    ", "
+                  )}
+                </div>
+                <div>
+                  <span class="font-medium">Random:</span> {length(
+                    @strategy_pools.euro_numbers.random
+                  )} liczb (pozostałe)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%= if @target_validation_error do %>
+        <div class="alert alert-warning">
+          <span class="hero-exclamation-triangle size-5 shrink-0"></span>
+          <div>
+            <p class="font-semibold">Komplet liczb nie pasuje do symulacji</p>
+            <p>{@target_validation_error}</p>
+          </div>
+        </div>
+      <% end %>
 
       <details class="collapse collapse-arrow bg-base-100">
         <summary class="collapse-title font-medium">
@@ -487,12 +568,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="number"
               name="max_attempts"
               class="input input-bordered"
-              placeholder="1000000"
+              placeholder="999999999"
               min="1000"
-              max="10000000"
+              max="999999999"
             />
             <label class="label">
-              <span class="label-text-alt">Domyślnie: 1,000,000</span>
+              <span class="label-text-alt">Domyślnie: 999,999,999</span>
             </label>
           </div>
 
@@ -504,12 +585,31 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="number"
               name="timeout_seconds"
               class="input input-bordered"
-              placeholder="300"
+              placeholder="86400"
               min="10"
-              max="36000"
+              max="86400"
             />
             <label class="label">
-              <span class="label-text-alt">Domyślnie: 300s (5 minut)</span>
+              <span class="label-text-alt">Domyślnie: 86400s (24 godziny)</span>
+            </label>
+          </div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer">
+            <input
+              type="checkbox"
+              id="half_random_mode_checkbox"
+              name="half_random_mode"
+              value="true"
+              class="checkbox checkbox-primary"
+              phx-hook="HalfRandomMode"
+            />
+              <span class="label-text ml-2">Losowo pomin połowę</span>
+            </label>
+            <label class="label">
+              <span class="label-text-alt">
+                Redukuje pulę liczb głównych z 50 do 25 przed generowaniem kombinacji
+              </span>
             </label>
           </div>
         </div>
