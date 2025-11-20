@@ -20,9 +20,6 @@ stateDiagram-v2
     Authorized --> Data_Access : user_id scope
     Unauthorized --> Error_Response
 
-    state Authenticated as Authenticated
-    state Authorized as Authorized
-
     note right of Authenticated
         User has valid session
         Can access protected routes
