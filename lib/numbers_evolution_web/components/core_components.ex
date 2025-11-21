@@ -491,6 +491,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :on_cancel, :any, default: nil
+  attr :data_cy, :string
 
   slot :title
   slot :inner_block, required: true
@@ -498,7 +499,12 @@ defmodule NumbersEvolutionWeb.CoreComponents do
 
   def modal(assigns) do
     ~H"""
-    <dialog id={@id} class={["modal", @show && "modal-open"]} phx-remove={hide_modal(@id)}>
+    <dialog
+      id={@id}
+      data-cy={@data_cy}
+      class={["modal", @show && "modal-open"]}
+      phx-remove={hide_modal(@id)}
+    >
       <div class="modal-box max-w-2xl">
         <h3 :if={@title != []} class="font-bold text-lg mb-4">
           {render_slot(@title)}

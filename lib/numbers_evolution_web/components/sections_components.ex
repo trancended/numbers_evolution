@@ -31,12 +31,13 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         <div class="flex gap-4">
           <button
             :if={length(@selected_strategies) >= 2}
+            data-cy="create-mix-btn"
             class="btn btn-secondary"
             disabled
           >
             <.icon name="hero-beaker" class="size-5" /> Utwórz mix ({length(@selected_strategies)})
           </button>
-          <button phx-click="open_strategy_form" class="btn btn-primary">
+          <button data-cy="create-strategy-btn" phx-click="open_strategy_form" class="btn btn-primary">
             <.icon name="hero-plus" class="size-5" /> Nowa strategia
           </button>
         </div>
@@ -64,6 +65,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
       <%!-- Strategy Form Modal --%>
       <.modal
+        data_cy="strategy-form-modal"
         id="strategy-form-modal"
         show={@show_strategy_form}
         on_cancel={JS.push("close_strategy_form")}
@@ -72,6 +74,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
         <div class="tabs tabs-boxed mb-4">
           <button
+            data-cy="ai-tab"
             phx-click="switch_strategy_tab"
             phx-value-tab="ai"
             class={["tab", @strategy_form_tab == :ai && "tab-active"]}
@@ -79,6 +82,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             <.icon name="hero-sparkles" class="size-4" /> AI
           </button>
           <button
+            data-cy="manual-tab"
             phx-click="switch_strategy_tab"
             phx-value-tab="manual"
             class={["tab", @strategy_form_tab == :manual && "tab-active"]}
@@ -196,13 +200,18 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
             <div class="mt-4 flex gap-2">
               <button
+                data-cy="save-strategy-btn"
                 phx-click="create_ai_strategy"
                 phx-value-prompt={@generated_strategy.strategy_name}
                 class="btn btn-primary flex-1"
               >
                 <.icon name="hero-check" class="size-5" /> Zapisz strategię
               </button>
-              <button phx-click="clear_generated_strategy" class="btn btn-ghost">
+              <button
+                data-cy="regenerate-strategy-btn"
+                phx-click="clear_generated_strategy"
+                class="btn btn-ghost"
+              >
                 <.icon name="hero-arrow-path" class="size-5" /> Generuj ponownie
               </button>
             </div>
@@ -238,6 +247,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
           <div class="grid md:grid-cols-2 gap-2">
             <button
+              data-cy="template-tylko-nieparzyste"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="tylko_nieparzyste"
@@ -250,6 +260,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
 
             <button
+              data-cy="template-dwie-nieparzyste-trzy-parzyste"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="dwie_nieparzyste_trzy_parzyste"
@@ -262,6 +273,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
 
             <button
+              data-cy="template-max-dwie-w-dziesiatce"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="max_dwie_w_dziesiatce"
@@ -274,6 +286,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
 
             <button
+              data-cy="template-balans-hot-cold"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="balans_hot_cold"
@@ -286,6 +299,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
 
             <button
+              data-cy="template-ekstremalna-hot"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="ekstremalna_hot"
@@ -298,6 +312,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
 
             <button
+              data-cy="template-przeciwny-trend"
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="przeciwny_trend"
@@ -310,7 +325,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </button>
           </div>
 
-          <button type="submit" class="btn btn-primary w-full mt-6">
+          <button data-cy="generate-strategy-btn" type="submit" class="btn btn-primary w-full mt-6">
             <.icon name="hero-sparkles" class="size-5" /> Wygeneruj strategię przez AI
           </button>
         </form>
@@ -465,6 +480,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <span class="label-text">Wybierz strategię</span>
         </label>
         <select
+          data-cy="strategy-select"
           name="strategy_id"
           class="select select-bordered"
           required
@@ -482,6 +498,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <span class="label-text">Target draw (losowanie docelowe)</span>
         </label>
         <select
+          data-cy="target-draw-select"
           name="target_draw_id"
           class="select select-bordered"
           required
@@ -615,7 +632,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         </div>
       </details>
 
-      <button type="submit" class="btn btn-primary w-full">
+      <button data-cy="start-simulation-btn" type="submit" class="btn btn-primary w-full">
         <.icon name="hero-play" class="size-5" /> Uruchom symulację
       </button>
     </form>

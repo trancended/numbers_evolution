@@ -29,6 +29,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
         <ul class="menu menu-horizontal px-1 gap-2">
           <li>
             <button
+              data-cy="nav-dashboard"
               phx-click="navigate"
               phx-value-section="dashboard"
               class={["btn btn-ghost", @active_section == :dashboard && "btn-active"]}
@@ -38,6 +39,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           </li>
           <li>
             <button
+              data-cy="nav-strategies"
               phx-click="navigate"
               phx-value-section="strategies"
               class={["btn btn-ghost", @active_section == :strategies && "btn-active"]}
@@ -47,6 +49,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           </li>
           <li>
             <button
+              data-cy="nav-simulations"
               phx-click="navigate"
               phx-value-section="simulations"
               class={["btn btn-ghost", @active_section == :simulations && "btn-active"]}
@@ -56,6 +59,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           </li>
           <li>
             <button
+              data-cy="nav-ranking"
               phx-click="navigate"
               phx-value-section="ranking"
               class={["btn btn-ghost", @active_section == :ranking && "btn-active"]}
@@ -65,6 +69,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           </li>
           <li>
             <button
+              data-cy="nav-generator"
               phx-click="navigate"
               phx-value-section="generator"
               class={["btn btn-ghost", @active_section == :generator && "btn-active"]}
@@ -74,7 +79,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           </li>
           <li>
             <div class="dropdown dropdown-end">
-              <label tabindex="0" class="btn btn-ghost">
+              <label data-cy="user-menu" tabindex="0" class="btn btn-ghost">
                 <.icon name="hero-user-circle" class="size-5" />
                 {@current_user.email}
               </label>
@@ -83,7 +88,9 @@ defmodule NumbersEvolutionWeb.PageComponents do
                 class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52 mt-2"
               >
                 <li>
-                  <button phx-click="logout" class="w-full text-left">Wyloguj</button>
+                  <button data-cy="logout-button" phx-click="logout" class="w-full text-left">
+                    Wyloguj
+                  </button>
                 </li>
               </ul>
             </div>
@@ -190,12 +197,14 @@ defmodule NumbersEvolutionWeb.PageComponents do
             <p class="text-2xl mb-8">Testuj strategie typowania Eurojackpot z pomocą AI</p>
             <div class="flex gap-4 justify-center">
               <button
+                data-cy="register-button"
                 phx-click="show_register_form"
                 class="btn btn-primary btn-lg"
               >
                 Zarejestruj się
               </button>
               <button
+                data-cy="login-button"
                 phx-click="show_login_form"
                 class="btn btn-secondary btn-lg"
               >
@@ -208,10 +217,11 @@ defmodule NumbersEvolutionWeb.PageComponents do
 
       <%!-- Registration Modal --%>
       <%= if @show_register_form do %>
-        <div class="modal modal-open">
+        <div data-cy="register-modal" class="modal modal-open">
           <div class="modal-box">
             <h3 class="font-bold text-lg mb-4">Rejestracja</h3>
             <.form
+              data-cy="register-form"
               for={@form}
               id="register-form"
               phx-submit="register"
@@ -236,10 +246,15 @@ defmodule NumbersEvolutionWeb.PageComponents do
                 required
               />
               <div class="modal-action">
-                <button type="button" phx-click="close_auth_form" class="btn">
+                <button
+                  data-cy="register-cancel"
+                  type="button"
+                  phx-click="close_auth_form"
+                  class="btn"
+                >
                   Anuluj
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button data-cy="register-submit" type="submit" class="btn btn-primary">
                   Zarejestruj się
                 </button>
               </div>
@@ -253,10 +268,11 @@ defmodule NumbersEvolutionWeb.PageComponents do
 
       <%!-- Login Modal --%>
       <%= if @show_login_form do %>
-        <div class="modal modal-open">
+        <div data-cy="login-modal" class="modal modal-open">
           <div class="modal-box">
             <h3 class="font-bold text-lg mb-4">Logowanie</h3>
             <.form
+              data-cy="login-form"
               for={@form}
               id="login-form"
               phx-submit="login"
@@ -275,10 +291,10 @@ defmodule NumbersEvolutionWeb.PageComponents do
                 required
               />
               <div class="modal-action">
-                <button type="button" phx-click="close_auth_form" class="btn">
+                <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
                   Anuluj
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button data-cy="login-submit" type="submit" class="btn btn-primary">
                   Zaloguj
                 </button>
               </div>
@@ -392,6 +408,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
           <h2 class="card-title">Szybkie akcje</h2>
           <div class="grid md:grid-cols-3 gap-4 mt-4">
             <button
+              data-cy="quick-create-strategy"
               phx-click="navigate"
               phx-value-section="strategies"
               class="btn btn-primary btn-lg"
@@ -399,6 +416,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               <.icon name="hero-plus-circle" class="size-6" /> Utwórz nową strategię
             </button>
             <button
+              data-cy="quick-run-simulation"
               phx-click="navigate"
               phx-value-section="simulations"
               class="btn btn-primary btn-lg"
@@ -406,6 +424,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               <.icon name="hero-play" class="size-6" /> Uruchom symulację
             </button>
             <button
+              data-cy="quick-generate-coupons"
               phx-click="navigate"
               phx-value-section="generator"
               class="btn btn-primary btn-lg"

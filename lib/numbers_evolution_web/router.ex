@@ -41,6 +41,11 @@ defmodule NumbersEvolutionWeb.Router do
     get "/draws/latest", DrawController, :latest
     get "/draws/analysis", DrawController, :analysis
     get "/draws/:id", DrawController, :show
+
+    # E2E test helpers (only in test_e2e environment)
+    if Mix.env() == :test_e2e do
+      post "/e2e/reset-db", E2eController, :reset_db
+    end
   end
 
   # Authenticated API routes
