@@ -55,7 +55,8 @@ defmodule NumbersEvolution.Client.OpenRouterClient do
 
     start_time = System.monotonic_time(:millisecond)
 
-    http_client = Application.get_env(:numbers_evolution, :http_client, NumbersEvolution.HTTPClient.Impl)
+    http_client =
+      Application.get_env(:numbers_evolution, :http_client, NumbersEvolution.HTTPClient.Impl)
 
     result =
       http_client.post("#{base_url}/chat/completions",

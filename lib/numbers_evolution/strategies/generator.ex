@@ -49,63 +49,70 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   # Special strategy: randomly omit half numbers, then select 3 odd + 2 even with max 2 per decade
   defp generate_half_random_strategy(_strategy) do
-    # Main numbers: randomly select 25 out of 50
+    with {:ok, main_numbers} <- generate_half_random_main(),
+         {:ok, euro_numbers} <- generate_half_random_euro() do
+      result = %{main: Enum.sort(main_numbers), euro: Enum.sort(euro_numbers)}
+      validate_half_random_result(result)
+    end
+  end
+
+  # Generate main numbers for half random strategy
+  defp generate_half_random_main do
+    # Randomly select 25 out of 50
     all_main = 1..50 |> Enum.to_list()
-    selected_main_pool = Enum.take_random(all_main, 25)
+    selected_pool = Enum.take_random(all_main, 25)
 
-    # From the selected pool, get odd and even numbers
-    odd_numbers = selected_main_pool |> Enum.filter(&(rem(&1, 2) == 1))
-    even_numbers = selected_main_pool |> Enum.filter(&(rem(&1, 2) == 0))
-
-    # Select 3 odd and 2 even
-    selected_odd = Enum.take_random(odd_numbers, min(3, length(odd_numbers)))
-    selected_even = Enum.take_random(even_numbers, min(2, length(even_numbers)))
-
-    main_numbers = selected_odd ++ selected_even
-
-    # If we don't have enough numbers, fill with remaining from pool
-    remaining_needed = 5 - length(main_numbers)
-
-    final_main_numbers =
-      if remaining_needed > 0 do
-        remaining_pool = selected_main_pool -- main_numbers
-        additional = Enum.take_random(remaining_pool, remaining_needed)
-        main_numbers ++ additional
-      else
-        main_numbers
-      end
+    # Select 3 odd and 2 even, then fill to 5 numbers
+    main_numbers = select_preferred_parity(selected_pool, odd_count: 3, even_count: 2)
+    main_numbers = fill_to_count(main_numbers, selected_pool, 5)
 
     # Ensure max 2 per decade and exactly 5 numbers
-    main_numbers = enforce_decade_constraint(Enum.take_random(final_main_numbers, 5))
+    final_numbers = enforce_decade_constraint(Enum.take_random(main_numbers, 5))
+    {:ok, final_numbers}
+  end
 
-    # Euro numbers: randomly select 6 out of 12
+  # Generate euro numbers for half random strategy
+  defp generate_half_random_euro do
+    # Randomly select 6 out of 12
     all_euro = 1..12 |> Enum.to_list()
-    selected_euro_pool = Enum.take_random(all_euro, 6)
+    selected_pool = Enum.take_random(all_euro, 6)
 
-    # Select 1 odd and 1 even from the euro pool
-    euro_odd = selected_euro_pool |> Enum.filter(&(rem(&1, 2) == 1))
-    euro_even = selected_euro_pool |> Enum.filter(&(rem(&1, 2) == 0))
+    # Select 1 odd and 1 even, then fill to 2 numbers
+    euro_numbers = select_preferred_parity(selected_pool, odd_count: 1, even_count: 1)
+    euro_numbers = fill_to_count(euro_numbers, selected_pool, 2)
 
-    selected_euro_odd = if length(euro_odd) > 0, do: [Enum.random(euro_odd)], else: []
-    selected_euro_even = if length(euro_even) > 0, do: [Enum.random(euro_even)], else: []
+    {:ok, Enum.take(euro_numbers, 2)}
+  end
 
-    euro_numbers = selected_euro_odd ++ selected_euro_even
+  # Select specified count of odd and even numbers from pool
+  defp select_preferred_parity(pool, opts) do
+    odd_count = Keyword.get(opts, :odd_count, 0)
+    even_count = Keyword.get(opts, :even_count, 0)
 
-    # Fill to 2 numbers if needed
-    final_euro_numbers =
-      if length(euro_numbers) < 2 do
-        remaining_euro = selected_euro_pool -- euro_numbers
-        additional_euro = Enum.take_random(remaining_euro, 2 - length(euro_numbers))
-        euro_numbers ++ additional_euro
-      else
-        euro_numbers
-      end
+    odd_numbers = pool |> Enum.filter(&(rem(&1, 2) == 1))
+    even_numbers = pool |> Enum.filter(&(rem(&1, 2) == 0))
 
-    euro_numbers = Enum.take(final_euro_numbers, 2)
+    selected_odd = Enum.take_random(odd_numbers, min(odd_count, length(odd_numbers)))
+    selected_even = Enum.take_random(even_numbers, min(even_count, length(even_numbers)))
 
-    result = %{main: Enum.sort(main_numbers), euro: Enum.sort(euro_numbers)}
+    selected_odd ++ selected_even
+  end
 
-    # Basic validation
+  # Fill numbers list to target count from remaining pool
+  defp fill_to_count(numbers, pool, target_count) do
+    remaining_needed = target_count - length(numbers)
+
+    if remaining_needed > 0 do
+      remaining_pool = pool -- numbers
+      additional = Enum.take_random(remaining_pool, remaining_needed)
+      numbers ++ additional
+    else
+      numbers
+    end
+  end
+
+  # Validate the final result
+  defp validate_half_random_result(result) do
     cond do
       length(result.main) != 5 -> {:error, :invalid_main_count}
       length(result.euro) != 2 -> {:error, :invalid_euro_count}

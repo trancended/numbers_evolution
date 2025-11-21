@@ -38,23 +38,32 @@ defmodule NumbersEvolution.AIProvider.Mock do
 
   defp match_tylko_nieparzyste(normalized_prompt) do
     # Match prompts that want ONLY odd numbers, not complex combinations
-    # Must contain "tylko" or "same" and "nieparzyste", but no other constraints
-    has_only_modifier =
-      String.contains?(normalized_prompt, "tylko") or
-        String.contains?(normalized_prompt, "same") or
-        String.contains?(normalized_prompt, "wyłącznie")
-
-    has_constraints =
-      String.contains?(normalized_prompt, "max ") or
-        String.contains?(normalized_prompt, "dziesiąt") or
-        String.contains?(normalized_prompt, "połow") or
-        String.contains?(normalized_prompt, "3 ") or
-        String.contains?(normalized_prompt, "dwie")
-
-    if has_only_modifier and String.contains?(normalized_prompt, "nieparzyste") and
-         not has_constraints do
+    if has_only_modifier?(normalized_prompt) and
+         has_odd_requirement?(normalized_prompt) and
+         not has_complex_constraints?(normalized_prompt) do
       strategy_tylko_nieparzyste()
     end
+  end
+
+  # Check if prompt contains "only" type modifiers
+  defp has_only_modifier?(prompt) do
+    String.contains?(prompt, "tylko") or
+      String.contains?(prompt, "same") or
+      String.contains?(prompt, "wyłącznie")
+  end
+
+  # Check if prompt requires odd numbers
+  defp has_odd_requirement?(prompt) do
+    String.contains?(prompt, "nieparzyste")
+  end
+
+  # Check if prompt has complex constraints that would disqualify simple "only odd" strategy
+  defp has_complex_constraints?(prompt) do
+    String.contains?(prompt, "max ") or
+      String.contains?(prompt, "dziesiąt") or
+      String.contains?(prompt, "połow") or
+      String.contains?(prompt, "3 ") or
+      String.contains?(prompt, "dwie")
   end
 
   defp match_2_nieparzyste_3_parzyste(normalized_prompt) do

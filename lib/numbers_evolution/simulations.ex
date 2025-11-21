@@ -11,6 +11,24 @@ defmodule NumbersEvolution.Simulations do
   alias NumbersEvolution.Repo
   alias NumbersEvolution.Simulations.{Simulation, SimulationDuplicateController}
 
+  defmodule SimulationContext do
+    @moduledoc """
+    Context struct for simulation execution parameters.
+    Reduces function arity by encapsulating related parameters.
+    """
+    defstruct [
+      :strategy,
+      :target_numbers,
+      :max_attempts,
+      :timeout_seconds,
+      :start_time,
+      :duplicate_controller,
+      :current_attempt,
+      :simulation_id,
+      :half_random_mode
+    ]
+  end
+
   ## Queries
 
   @doc """
@@ -546,18 +564,19 @@ defmodule NumbersEvolution.Simulations do
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
 
-      result =
-        simulate_until_match(
-          strategy,
-          target_draw.numbers,
-          max_attempts,
-          timeout_seconds,
-          start_time,
-          duplicate_controller,
-          0,
-          simulation_id,
-          half_random_mode
-        )
+      context = %SimulationContext{
+        strategy: strategy,
+        target_numbers: target_draw.numbers,
+        max_attempts: max_attempts,
+        timeout_seconds: timeout_seconds,
+        start_time: start_time,
+        duplicate_controller: duplicate_controller,
+        current_attempt: 0,
+        simulation_id: simulation_id,
+        half_random_mode: half_random_mode
+      }
+
+      result = simulate_until_match(context)
 
       # Finalize simulation
       finalize_simulation(simulation_id, result, start_time, strategy, duplicate_controller)
@@ -586,34 +605,19 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  defp simulate_until_match(
-         strategy,
-         target_numbers,
-         max_attempts,
-         timeout_seconds,
-         start_time,
-         duplicate_controller,
-         current_attempt,
-         simulation_id,
-         half_random_mode
-       ) do
+  defp simulate_until_match(%SimulationContext{} = context) do
     # Check limits first
-    case check_simulation_limits(current_attempt, max_attempts, start_time, timeout_seconds) do
+    case check_simulation_limits(
+           context.current_attempt,
+           context.max_attempts,
+           context.start_time,
+           context.timeout_seconds
+         ) do
       {:continue, _} ->
-        process_simulation_attempt(
-          strategy,
-          target_numbers,
-          max_attempts,
-          timeout_seconds,
-          start_time,
-          duplicate_controller,
-          current_attempt,
-          simulation_id,
-          half_random_mode
-        )
+        process_simulation_attempt(context)
 
       {:timeout, reason} ->
-        {:timeout, reason, current_attempt, duplicate_controller}
+        {:timeout, reason, context.current_attempt, context.duplicate_controller}
     end
   end
 
@@ -630,115 +634,44 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  defp process_simulation_attempt(
-         strategy,
-         target_numbers,
-         max_attempts,
-         timeout_seconds,
-         start_time,
-         duplicate_controller,
-         current_attempt,
-         simulation_id,
-         half_random_mode
-       ) do
-    case NumbersEvolution.Strategies.Generator.generate_numbers(strategy,
-           half_random_mode: half_random_mode
+  defp process_simulation_attempt(%SimulationContext{} = context) do
+    case NumbersEvolution.Strategies.Generator.generate_numbers(context.strategy,
+           half_random_mode: context.half_random_mode
          ) do
       {:ok, generated} ->
-        handle_generated_numbers(
-          generated,
-          strategy,
-          target_numbers,
-          max_attempts,
-          timeout_seconds,
-          start_time,
-          duplicate_controller,
-          current_attempt,
-          simulation_id,
-          half_random_mode
-        )
+        handle_generated_numbers(generated, context)
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  defp handle_generated_numbers(
-         generated,
-         strategy,
-         target_numbers,
-         max_attempts,
-         timeout_seconds,
-         start_time,
-         duplicate_controller,
-         current_attempt,
-         simulation_id,
-         half_random_mode
-       ) do
-    case SimulationDuplicateController.check_attempt(duplicate_controller, generated) do
+  defp handle_generated_numbers(generated, %SimulationContext{} = context) do
+    case SimulationDuplicateController.check_attempt(context.duplicate_controller, generated) do
       {:duplicate, updated_controller} ->
         # Skip duplicate - recursive call without incrementing attempt counter
-        simulate_until_match(
-          strategy,
-          target_numbers,
-          max_attempts,
-          timeout_seconds,
-          start_time,
-          updated_controller,
-          current_attempt,
-          simulation_id,
-          half_random_mode
-        )
+        updated_context = %{context | duplicate_controller: updated_controller}
+        simulate_until_match(updated_context)
 
       {:unique, updated_controller} ->
-        handle_unique_attempt(
-          generated,
-          strategy,
-          target_numbers,
-          max_attempts,
-          timeout_seconds,
-          start_time,
-          updated_controller,
-          current_attempt,
-          simulation_id,
-          half_random_mode
-        )
+        updated_context = %{context | duplicate_controller: updated_controller}
+        handle_unique_attempt(generated, updated_context)
     end
   end
 
-  defp handle_unique_attempt(
-         generated,
-         strategy,
-         target_numbers,
-         max_attempts,
-         timeout_seconds,
-         start_time,
-         duplicate_controller,
-         current_attempt,
-         simulation_id,
-         half_random_mode
-       ) do
-    if matches_target?(generated, target_numbers) do
-      {:success, current_attempt + 1, generated, duplicate_controller}
+  defp handle_unique_attempt(generated, %SimulationContext{} = context) do
+    if matches_target?(generated, context.target_numbers) do
+      {:success, context.current_attempt + 1, generated, context.duplicate_controller}
     else
       # Broadcast progress every 1000 attempts for more frequent updates
       # Also broadcast at the start (current_attempt == 0)
-      if rem(current_attempt, 1_000) == 0 || current_attempt == 0 do
-        broadcast_progress(simulation_id, current_attempt, start_time)
+      if rem(context.current_attempt, 1_000) == 0 || context.current_attempt == 0 do
+        broadcast_progress(context.simulation_id, context.current_attempt, context.start_time)
       end
 
       # Continue simulation
-      simulate_until_match(
-        strategy,
-        target_numbers,
-        max_attempts,
-        timeout_seconds,
-        start_time,
-        duplicate_controller,
-        current_attempt + 1,
-        simulation_id,
-        half_random_mode
-      )
+      updated_context = %{context | current_attempt: context.current_attempt + 1}
+      simulate_until_match(updated_context)
     end
   end
 

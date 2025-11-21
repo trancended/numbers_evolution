@@ -888,8 +888,7 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   defp translate_errors(changeset) do
     changeset.errors
-    |> Enum.map(fn {field, {message, _}} -> "#{field}: #{message}" end)
-    |> Enum.join(", ")
+    |> Enum.map_join(", ", fn {field, {message, _}} -> "#{field}: #{message}" end)
   end
 
   defp extract_changeset_errors(changeset) do
