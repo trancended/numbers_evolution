@@ -596,14 +596,14 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
           <div class="form-control">
             <label class="label cursor-pointer">
-            <input
-              type="checkbox"
-              id="half_random_mode_checkbox"
-              name="half_random_mode"
-              value="true"
-              class="checkbox checkbox-primary"
-              phx-hook="HalfRandomMode"
-            />
+              <input
+                type="checkbox"
+                id="half_random_mode_checkbox"
+                name="half_random_mode"
+                value="true"
+                class="checkbox checkbox-primary"
+                phx-hook="HalfRandomMode"
+              />
               <span class="label-text ml-2">Losowo pomin połowę</span>
             </label>
             <label class="label">

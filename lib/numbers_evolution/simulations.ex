@@ -545,6 +545,7 @@ defmodule NumbersEvolution.Simulations do
 
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
+
       result =
         simulate_until_match(
           strategy,
@@ -640,7 +641,9 @@ defmodule NumbersEvolution.Simulations do
          simulation_id,
          half_random_mode
        ) do
-    case NumbersEvolution.Strategies.Generator.generate_numbers(strategy, half_random_mode: half_random_mode) do
+    case NumbersEvolution.Strategies.Generator.generate_numbers(strategy,
+           half_random_mode: half_random_mode
+         ) do
       {:ok, generated} ->
         handle_generated_numbers(
           generated,

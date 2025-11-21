@@ -68,7 +68,8 @@ defmodule NumbersEvolution.MixProject do
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dotenvy, "~> 0.8.0", only: [:dev, :test]}
+      {:dotenvy, "~> 0.8.0", only: [:dev, :test]},
+      {:mox, "~> 1.1", only: :test}
     ]
   end
 

@@ -27,8 +27,11 @@ defmodule NumbersEvolution.Application do
     opts = [strategy: :one_for_one, name: NumbersEvolution.Supervisor]
 
     with {:ok, pid} <- Supervisor.start_link(children, opts) do
-      # Start pending simulations after Repo is ready
-      :ok = start_pending_simulations_after_repo_ready()
+      # Start pending simulations after Repo is ready (only in dev/prod)
+      unless Mix.env() == :test do
+        :ok = start_pending_simulations_after_repo_ready()
+      end
+
       {:ok, pid}
     end
   end

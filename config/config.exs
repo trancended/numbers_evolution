@@ -9,7 +9,8 @@ import Config
 
 config :numbers_evolution,
   ecto_repos: [NumbersEvolution.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  http_client: NumbersEvolution.HTTPClient.Impl
 
 # Configures the endpoint
 config :numbers_evolution, NumbersEvolutionWeb.Endpoint,

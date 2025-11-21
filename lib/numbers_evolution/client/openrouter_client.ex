@@ -55,13 +55,15 @@ defmodule NumbersEvolution.Client.OpenRouterClient do
 
     start_time = System.monotonic_time(:millisecond)
 
+    http_client = Application.get_env(:numbers_evolution, :http_client, NumbersEvolution.HTTPClient.Impl)
+
     result =
-      Req.post("#{base_url}/chat/completions",
+      http_client.post("#{base_url}/chat/completions",
         headers: headers,
         json: payload,
         receive_timeout: timeout
       )
-|> IO.inspect(label: "result")
+
     duration = System.monotonic_time(:millisecond) - start_time
 
     # Log the response

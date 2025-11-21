@@ -59,7 +59,9 @@ defmodule NumbersEvolution.Strategies.GeneratorTest do
       assert length(Enum.uniq(result.euro)) == 2
     end
 
-    test "strategy with 'Losowo pomin połowę' in name uses half_random logic", %{strategy: strategy} do
+    test "strategy with 'Losowo pomin połowę' in name uses half_random logic", %{
+      strategy: strategy
+    } do
       strategy_with_name = %{strategy | name: "Losowo pomin połowę - Test"}
 
       {:ok, result} = Generator.generate_numbers(strategy_with_name)

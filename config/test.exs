@@ -9,7 +9,7 @@ config :numbers_evolution, NumbersEvolution.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "numbers_evolution_test#{System.get_env("MIX_TEST_PARTITION")}",
+  database: "numbers_evolution_test",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
@@ -26,8 +26,8 @@ config :numbers_evolution, NumbersEvolution.Mailer, adapter: Swoosh.Adapters.Tes
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
-# Print only warnings and errors during test
-config :logger, level: :warning
+# Suppress all log messages during test for clean dot-only output
+config :logger, level: :emergency
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
@@ -35,3 +35,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Configure mocks for testing
+config :numbers_evolution, :http_client, NumbersEvolution.HTTPClientMock
