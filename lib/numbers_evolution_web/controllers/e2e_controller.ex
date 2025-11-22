@@ -2,18 +2,17 @@ defmodule NumbersEvolutionWeb.E2eController do
   use NumbersEvolutionWeb, :controller
 
   def reset_db(conn, _params) do
-    try do
-      # Reset database for E2E tests
-      Mix.Task.run("e2e_db", ["reset"])
+    # Reset database for E2E tests
+    case :erlang.apply(&Mix.Task.run/2, ["e2e_db", ["reset"]]) do
+      result when is_tuple(result) or result == :ok ->
+        conn
+        |> put_status(:ok)
+        |> json(%{status: "ok", message: "Database reset successfully"})
 
-      conn
-      |> put_status(:ok)
-      |> json(%{status: "ok", message: "Database reset successfully"})
-    rescue
-      error ->
+      _ ->
         conn
         |> put_status(:internal_server_error)
-        |> json(%{status: "error", message: "Failed to reset database: #{inspect(error)}"})
+        |> json(%{status: "error", message: "Failed to reset database"})
     end
   end
 end

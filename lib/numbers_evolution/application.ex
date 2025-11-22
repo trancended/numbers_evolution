@@ -8,7 +8,8 @@ defmodule NumbersEvolution.Application do
   @impl true
   def start(_type, _args) do
     # Initialize ETS table for rate limiting
-    NumbersEvolutionWeb.Plugs.RateLimiter.init_table()
+    :ets.new(:rate_limiter, [:set, :public, :named_table])
+    :ets.insert(:rate_limiter, {:last_request, System.system_time(:second)})
 
     children = [
       NumbersEvolutionWeb.Telemetry,

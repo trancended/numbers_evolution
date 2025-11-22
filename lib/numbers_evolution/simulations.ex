@@ -635,7 +635,7 @@ defmodule NumbersEvolution.Simulations do
   end
 
   defp process_simulation_attempt(%SimulationContext{} = context) do
-    case NumbersEvolution.Strategies.Generator.generate_numbers(context.strategy,
+    case Strategies.Generator.generate_numbers(context.strategy,
            half_random_mode: context.half_random_mode
          ) do
       {:ok, generated} ->
@@ -785,10 +785,10 @@ defmodule NumbersEvolution.Simulations do
     if length(successful_simulations) > 0 do
       median = calculate_median(successful_simulations)
 
-      strategy = Repo.get!(NumbersEvolution.Strategies.Strategy, strategy_id)
+      strategy = Repo.get!(Strategies.Strategy, strategy_id)
 
       strategy
-      |> NumbersEvolution.Strategies.Strategy.performance_changeset(median)
+      |> Strategies.Strategy.performance_changeset(median)
       |> Repo.update!()
     end
   end
