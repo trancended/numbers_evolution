@@ -22,8 +22,10 @@ import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import {hooks as colocatedHooks} from "phoenix-colocated/numbers_evolution"
 import topbar from "../vendor/topbar"
+
+// Phoenix colocated hooks (optional, set to empty if not installed)
+const colocatedHooks = {}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
