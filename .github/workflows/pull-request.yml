@@ -219,8 +219,14 @@ jobs:
 
     - name: Wait for server to be ready
       run: |
+        echo "Waiting for Phoenix server to start..."
         timeout 60 bash -c 'until curl -f http://localhost:4000 2>/dev/null; do echo "Waiting for server..."; sleep 2; done'
-        echo "Server is ready!"
+        echo "Phoenix server is responding!"
+        
+        echo "Testing E2E endpoint availability..."
+        sleep 5
+        curl -v -X POST http://localhost:4000/api/e2e/reset-db 2>&1 | grep -E "(HTTP|status|message)" || true
+        echo "E2E endpoint check complete!"
 
     - name: Run Cypress tests
       run: npx cypress run --config-file cypress.config.js
