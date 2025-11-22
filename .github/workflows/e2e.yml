@@ -68,23 +68,49 @@ jobs:
         MIX_ENV: test_e2e
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
 
+    - name: Compile application
+      run: mix compile
+      env:
+        MIX_ENV: test_e2e
+
     - name: Build assets
       run: mix assets.build
 
-    - name: Start Phoenix server
-      run: mix phx.server
+    - name: Start Phoenix server in background
+      run: |
+        mix phx.server &
+        echo $! > phoenix.pid
       env:
         MIX_ENV: test_e2e
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
-        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use
+        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use_must_be_at_least_64_chars_long
         PHX_HOST: localhost
         PORT: 4000
 
     - name: Wait for server to be ready
       run: |
-        timeout 60 bash -c 'until curl -f http://localhost:4000; do sleep 1; done'
+        timeout 60 bash -c 'until curl -f http://localhost:4000 2>/dev/null; do echo "Waiting for server..."; sleep 2; done'
+        echo "Server is ready!"
 
     - name: Run Cypress tests
       run: npx cypress run --config-file cypress.config.js
       env:
         CYPRESS_baseUrl: http://localhost:4000
+
+    - name: Stop Phoenix server
+      if: always()
+      run: |
+        if [ -f phoenix.pid ]; then
+          kill $(cat phoenix.pid) || true
+          rm phoenix.pid
+        fi
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: cypress-artifacts
+        path: |
+          cypress/videos/
+          cypress/screenshots/
+        retention-days: 7

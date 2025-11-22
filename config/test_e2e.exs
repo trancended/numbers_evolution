@@ -5,7 +5,7 @@ config :numbers_evolution, NumbersEvolution.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "numbers_evolution_test_e2e",
+  database: "numbers_evolution_e2e",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
