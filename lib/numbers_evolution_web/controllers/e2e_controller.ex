@@ -1,6 +1,7 @@
 defmodule NumbersEvolutionWeb.E2eController do
   use NumbersEvolutionWeb, :controller
 
+  alias Ecto.Adapters.SQL
   alias NumbersEvolution.Accounts
   alias NumbersEvolution.Repo
 
@@ -15,7 +16,7 @@ defmodule NumbersEvolutionWeb.E2eController do
       try do
         # Get all tables except schema_migrations
         {:ok, result} =
-          Ecto.Adapters.SQL.query(
+          SQL.query(
             Repo,
             """
             SELECT tablename FROM pg_tables
@@ -29,7 +30,7 @@ defmodule NumbersEvolutionWeb.E2eController do
         # Truncate all tables
         if tables != [] do
           table_list = Enum.join(tables, ", ")
-          Ecto.Adapters.SQL.query!(Repo, "TRUNCATE TABLE #{table_list} RESTART IDENTITY CASCADE")
+          SQL.query!(Repo, "TRUNCATE TABLE #{table_list} RESTART IDENTITY CASCADE")
         end
 
         # Create a test user
