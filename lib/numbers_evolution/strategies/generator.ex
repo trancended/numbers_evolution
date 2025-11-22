@@ -156,7 +156,7 @@ defmodule NumbersEvolution.Strategies.Generator do
             decade_end = min((decade + 1) * 10, 50)
             decade_range = decade_start..decade_end |> Enum.to_list()
             existing = Map.get(by_decade, decade, [])
-            decade_range -- existing -- constrained
+            decade_range -- (existing -- constrained)
           end)
 
         additional_needed = 5 - count

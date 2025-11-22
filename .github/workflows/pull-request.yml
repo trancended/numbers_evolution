@@ -199,6 +199,9 @@ jobs:
       env:
         MIX_ENV: test_e2e
 
+    - name: Setup assets
+      run: mix assets.setup
+
     - name: Build assets
       run: mix assets.build
 
