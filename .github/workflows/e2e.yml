@@ -1,0 +1,90 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+          node_modules
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Install Elixir dependencies
+      run: mix deps.get
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Build assets
+      run: mix assets.build
+
+    - name: Start Phoenix server
+      run: mix phx.server
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use
+        PHX_HOST: localhost
+        PORT: 4000
+
+    - name: Wait for server to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:4000; do sleep 1; done'
+
+    - name: Run Cypress tests
+      run: npx cypress run --config-file cypress.config.js
+      env:
+        CYPRESS_baseUrl: http://localhost:4000
