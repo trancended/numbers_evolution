@@ -61,11 +61,18 @@ describe('Authentication', () => {
         cy.get('[data-cy="register-submit"]').click()
       })
 
+      // Wait for registration to complete and redirect
+      cy.wait(3000)
+
       // Verify redirect to dashboard - normalize URL comparison
       cy.url().should('satisfy', (url) => {
         const normalized = url.replace('localhost', '127.0.0.1')
         return normalized === 'http://127.0.0.1:4000/' || normalized === 'http://127.0.0.1:4000'
       })
+
+      // Wait for LiveView to process token and render navbar
+      cy.wait(2000)
+
       cy.get('[data-cy="user-menu"]').should('contain', 'newuser@example.com')
       cy.get('h1').should('contain', 'Dashboard')
     })
