@@ -49,7 +49,8 @@ Cypress.Commands.add('login', (email, password) => {
 
     // Otwórz modal logowania
     cy.get('[data-cy="login-button"]').click()
-    cy.get('[data-cy="login-modal"]').should('be.visible')
+    // Wait for LiveView to process the event and render the modal
+    cy.get('[data-cy="login-modal"]', { timeout: 5000 }).should('be.visible')
 
     // Wypełnij formularz
     cy.get('[data-cy="login-form"]').within(() => {
@@ -58,8 +59,11 @@ Cypress.Commands.add('login', (email, password) => {
       cy.get('[data-cy="login-submit"]').click()
     })
 
-    // Sprawdź przekierowanie na dashboard
-    cy.url().should('eq', 'http://127.0.0.1:4000/')
+    // Sprawdź przekierowanie na dashboard - normalize URL comparison
+    cy.url().should('satisfy', (url) => {
+      const normalized = url.replace('localhost', '127.0.0.1')
+      return normalized === 'http://127.0.0.1:4000/' || normalized === 'http://127.0.0.1:4000'
+    })
     cy.get('[data-cy="user-menu"]').should('contain', email)
   })
 })

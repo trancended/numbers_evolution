@@ -124,7 +124,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <strong>✓ Strategia wygenerowana pomyślnie!</strong>
         </.alert>
 
-        <div class="card bg-base-200">
+        <div data-cy="strategy-preview" class="card bg-base-200">
           <div class="card-body">
             <h3 class="card-title flex items-center gap-2">
               <.icon name="hero-sparkles" class="size-6 text-warning" />

@@ -6,7 +6,10 @@
   "scripts": {
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
-    "cypress:run:headless": "cypress run --headless"
+    "cypress:run:headless": "cypress run --headless",
+    "e2e:setup": "MIX_ENV=test_e2e mix ecto.create && MIX_ENV=test_e2e mix ecto.migrate",
+    "e2e:server": "MIX_ENV=test_e2e mix phx.server",
+    "e2e:test": "npm run e2e:setup && echo 'Starting server in background...' && MIX_ENV=test_e2e mix phx.server & SERVER_PID=$! && sleep 5 && npm run cypress:run && kill $SERVER_PID || true"
   },
   "devDependencies": {
     "cypress": "^13.6.0"

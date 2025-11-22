@@ -1,214 +1,123 @@
-# E2E Tests - Numbers Evolution
+# Cypress E2E Tests
 
-Kompleksowe testy end-to-end dla aplikacji Numbers Evolution używające Cypress.
+## Prerequisites
 
-## Wymagania wstępne
+Before running E2E tests, ensure you have:
 
-- Node.js 16+
-- Elixir 1.14+
-- PostgreSQL 14+
-- Zainstalowane zależności: `npm install`
+1. PostgreSQL running locally
+2. Database `numbers_evolution_e2e` created
+3. Phoenix server running in `test_e2e` environment
 
-## Uruchamianie testów
+## Quick Start
 
-### 1. Przygotowanie środowiska
+### Option 1: Using Helper Script (Easiest)
 
+Use the provided helper script:
 ```bash
-# Upewnij się, że PostgreSQL jest uruchomiony
-# Na macOS z Homebrew:
-brew services start postgresql
-
-# Albo użyj Docker:
-docker run --name postgres-e2e -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:14
+./scripts/e2e.sh
 ```
 
-### 2. Uruchomienie aplikacji w trybie E2E
+This will:
+- Check PostgreSQL is running
+- Create the database if needed
+- Run migrations
+- Start the Phoenix server in `test_e2e` environment
 
+Then in a separate terminal, run:
 ```bash
-# W pierwszym terminalu - uruchom Phoenix server
-MIX_ENV=test_e2e mix phx.server
-```
-
-### 3. Uruchomienie testów Cypress
-
-```bash
-# W drugim terminalu - uruchom testy
 npm run cypress:run
-
-# Lub uruchom w trybie interaktywnym
-npm run cypress:open
 ```
 
-## Struktura testów
+### Option 2: Manual Setup (Recommended for Development)
 
-```
-cypress/
-├── e2e/                    # Testy E2E
-│   ├── auth.cy.js         # Testy rejestracji i logowania
-│   ├── strategies.cy.js   # Testy zarządzania strategiami
-│   └── simulations.cy.js  # Testy symulacji
-├── fixtures/              # Statyczne dane testowe
-├── support/               # Wspólne funkcje
-│   ├── commands.js        # Custom Cypress commands
-│   └── e2e.js            # Globalna konfiguracja
-└── README.md             # Ten plik
-```
+1. **Setup database:**
+   ```bash
+   MIX_ENV=test_e2e mix ecto.create
+   MIX_ENV=test_e2e mix ecto.migrate
+   ```
 
-## Baza danych testowa
+2. **Start Phoenix server in `test_e2e` environment:**
+   ```bash
+   MIX_ENV=test_e2e mix phx.server
+   ```
+   
+   Or use the npm script:
+   ```bash
+   npm run e2e:server
+   ```
 
-Testy używają dedykowanej bazy danych `numbers_evolution_test_e2e`, która jest automatycznie resetowana przed każdym testem.
+3. **In a separate terminal, run Cypress tests:**
+   ```bash
+   npm run cypress:run
+   ```
+   
+   Or open Cypress UI:
+   ```bash
+   npm run cypress:open
+   ```
 
+### Option 2: Automated Setup (All-in-one)
+
+Run everything in one command:
 ```bash
-# Ręczne zarządzanie bazą E2E
-MIX_ENV=test_e2e mix e2e_db reset    # Resetuj bazę (drop, create, migrate, seed)
-MIX_ENV=test_e2e mix e2e_db seed     # Tylko seed danych
-MIX_ENV=test_e2e mix e2e_db help     # Pokaż dostępne komendy
+npm run e2e:test
 ```
+
+**Note:** This will setup the database, start the server, run tests, and stop the server automatically.
+
+## Environment Variables
+
+The Phoenix server must run with:
+- `MIX_ENV=test_e2e` - Required for E2E endpoints to be available
+- `DATABASE_URL` - Optional, defaults to `postgresql://postgres:postgres@localhost:5432/numbers_evolution_e2e`
+- `SECRET_KEY_BASE` - Optional, uses default from `config/test_e2e.exs`
+
+## Important Notes
+
+⚠️ **The E2E reset endpoint (`/api/e2e/reset-db`) is ONLY available when `MIX_ENV=test_e2e`**
+
+If you see the error:
+```
+HTTP 403: {"message":"E2E endpoints only available in test_e2e environment"}
+```
+
+Make sure you're running the server with `MIX_ENV=test_e2e`.
+
+## Test Structure
+
+- `cypress/e2e/auth.cy.js` - Authentication tests (registration, login, logout)
+- `cypress/e2e/strategies.cy.js` - Strategy management tests
+- `cypress/e2e/simulations.cy.js` - Simulation tests
 
 ## Custom Commands
 
-### Authentication
-```javascript
-cy.login('test@example.com', 'testpassword123')  // Zaloguj użytkownika
-```
+The following custom Cypress commands are available:
 
-### Strategies
-```javascript
-cy.createAIStrategy('Test Strategy')  // Utwórz strategię przez AI
-```
-
-### Simulations
-```javascript
-cy.runSimulation(0, 0)  // Uruchom symulację (strategy_index, target_draw_index)
-cy.waitForSimulationComplete(60000)  // Czekaj na zakończenie symulacji
-```
-
-## Data-cy Attributes
-
-Testy używają atrybutów `data-cy` dla stabilnej identyfikacji elementów:
-
-```html
-<!-- Przykład -->
-<button data-cy="register-button" phx-click="show_register_form">
-  Zarejestruj się
-</button>
-```
-
-## Specyfika Phoenix LiveView
-
-### Czekanie na LiveView mount
-```javascript
-cy.visit('/')
-cy.window().its('liveSocket').should('exist')  // Zawsze czekaj na LiveView
-```
-
-### Real-time updates
-```javascript
-// Symulacje mogą trwać długo - zwiększ timeout
-cy.get('[data-cy="simulation-status"]', { timeout: 60000 })
-  .should('contain', 'Zakończona')
-```
-
-### Modals w DaisyUI
-```javascript
-cy.get('[data-cy="register-modal"]').should('be.visible')
-cy.get('.modal.modal-open').should('exist')
-```
+- `cy.login(email, password)` - Login a user (uses session caching)
+- `cy.createAIStrategy(name)` - Create an AI strategy
+- `cy.runSimulation(strategyIndex, targetDrawIndex)` - Run a simulation
+- `cy.waitForSimulationComplete(timeoutMs)` - Wait for simulation to complete
 
 ## Troubleshooting
 
-### Problemy z bazą danych
-```bash
-# Sprawdź czy PostgreSQL działa
-psql -h localhost -U postgres
+### Database Connection Issues
 
-# Resetuj bazę manualnie
-MIX_ENV=test_e2e mix e2e_db reset
-```
+If you see database connection errors:
+1. Ensure PostgreSQL is running: `pg_isready`
+2. Check database exists: `psql -l | grep numbers_evolution_e2e`
+3. Verify DATABASE_URL matches your PostgreSQL setup
 
-### Problemy z Cypress
-```bash
-# Wyczyść cache Cypress
-npx cypress cache clear
+### Server Not Starting
 
-# Uruchom w trybie debug
-npm run cypress:open
-```
+If the server fails to start:
+1. Check if port 4000 is available: `lsof -i :4000`
+2. Verify `MIX_ENV=test_e2e` is set
+3. Check server logs for errors
 
-### Problemy z LiveView
-- Upewnij się, że `MIX_ENV=test_e2e` jest ustawiony
-- Sprawdź czy Phoenix server nasłuchuje na porcie 4000
-- Symulacje mogą trwać długo - zwiększ timeout w testach
+### Tests Failing
 
-## CI/CD
-
-Testy są skonfigurowane do uruchamiania w GitHub Actions:
-
-```yaml
-# .github/workflows/e2e.yml
-- name: Setup test database
-  run: |
-    MIX_ENV=test_e2e mix ecto.create
-    MIX_ENV=test_e2e mix ecto.migrate
-    MIX_ENV=test_e2e mix run priv/repo/seeds.exs
-- name: Run Phoenix server
-  run: MIX_ENV=test_e2e mix phx.server
-  background: true
-- name: Run E2E tests
-  run: npx cypress run
-```
-
-## Debugowanie
-
-### Wizualne debugowanie
-```javascript
-cy.pause()  // Zatrzymaj test w danym miejscu
-cy.debug()  // Dodaj breakpoint
-```
-
-### Logowanie
-```javascript
-cy.window().then((win) => {
-  cy.spy(win.console, 'log')  // Śledź logi przeglądarki
-})
-```
-
-### Screenshot przy błędach
-Cypress automatycznie robi screenshot przy niepowodzeniach w katalogu `cypress/screenshots/`.
-
-## Pokrycie testowe
-
-| Obszar | Status | Opis |
-|--------|--------|------|
-| **Rejestracja** | ✅ | Rejestracja, walidacja, błędy |
-| **Logowanie** | ✅ | Logowanie, błędne dane, wylogowanie |
-| **Strategie AI** | ✅ | Tworzenie przez AI, templates, zapis |
-| **Symulacje** | ✅ | Uruchamianie, śledzenie postępów, historia |
-| **Dashboard** | ⚠️ | Podstawowe testy nawigacji |
-| **Ranking** | ❌ | Nie zaimplementowane |
-| **Generator** | ❌ | Nie zaimplementowane |
-| **API** | ❌ | Nie zaimplementowane |
-
-## Rozwój
-
-### Dodawanie nowych testów
-
-1. Utwórz plik w `cypress/e2e/`
-2. Użyj `data-cy` attributes dla elementów
-3. Dodaj odpowiednie `beforeEach` hooks
-4. Wykorzystaj custom commands
-
-### Dodawanie data-cy attributes
-
-W komponentach dodawaj atrybuty `data-cy` do kluczowych elementów:
-
-```heex
-<button data-cy="create-strategy-btn" phx-click="open_strategy_form">
-  Nowa strategia
-</button>
-```
-
----
-
-**Status:** ✅ Gotowe do uruchomienia
-**Ostatnia aktualizacja:** Listopad 2025
+If tests fail:
+1. Ensure server is running: `curl http://127.0.0.1:4000`
+2. Check E2E endpoint: `curl -X POST http://127.0.0.1:4000/api/e2e/reset-db`
+3. Verify `MIX_ENV=test_e2e` is set
+4. Check Cypress screenshots in `cypress/screenshots/`
