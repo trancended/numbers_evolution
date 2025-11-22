@@ -20,19 +20,19 @@ defmodule NumbersEvolution.Accounts.User do
   @foreign_key_type :binary_id
 
   schema "users" do
-    field :email, :string
-    field :hashed_password, :string
-    field :confirmed_at, :naive_datetime
-    field :preferences, :map
+    field(:email, :string)
+    field(:hashed_password, :string)
+    field(:confirmed_at, :naive_datetime)
+    field(:preferences, :map)
 
     # Virtual fields for registration
-    field :password, :string, virtual: true, redact: true
-    field :password_confirmation, :string, virtual: true, redact: true
+    field(:password, :string, virtual: true, redact: true)
+    field(:password_confirmation, :string, virtual: true, redact: true)
 
     # Associations
-    has_many :strategies, NumbersEvolution.Strategies.Strategy
-    has_many :simulations, NumbersEvolution.Simulations.Simulation
-    has_many :events, NumbersEvolution.Events.Event
+    has_many(:strategies, NumbersEvolution.Strategies.Strategy)
+    has_many(:simulations, NumbersEvolution.Simulations.Simulation)
+    has_many(:events, NumbersEvolution.Events.Event)
 
     timestamps(type: :utc_datetime)
   end

@@ -16,12 +16,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   @doc """
   Renders the strategies management section.
   """
-  attr :strategies, :list, required: true
-  attr :selected_strategies, :list, required: true
-  attr :show_strategy_form, :boolean, required: true
-  attr :strategy_form_tab, :atom, required: true
-  attr :generated_strategy, :map, default: nil
-  attr :example_prompt, :string, default: ""
+  attr(:strategies, :list, required: true)
+  attr(:selected_strategies, :list, required: true)
+  attr(:show_strategy_form, :boolean, required: true)
+  attr(:strategy_form_tab, :atom, required: true)
+  attr(:generated_strategy, :map, default: nil)
+  attr(:example_prompt, :string, default: "")
 
   def strategies_section(assigns) do
     ~H"""
@@ -112,8 +112,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :generated_strategy, :map, default: nil
-  attr :example_prompt, :string, default: ""
+  attr(:generated_strategy, :map, default: nil)
+  attr(:example_prompt, :string, default: "")
 
   defp ai_strategy_form(assigns) do
     ~H"""
@@ -334,8 +334,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategy, :map, required: true
-  attr :selected, :boolean, required: true
+  attr(:strategy, :map, required: true)
+  attr(:selected, :boolean, required: true)
 
   defp strategy_card(assigns) do
     ~H"""
@@ -404,13 +404,13 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   @doc """
   Renders the simulations section with form and history.
   """
-  attr :strategies, :list, required: true
-  attr :simulations, :list, required: true
-  attr :draws, :list, required: true
-  attr :live_attempts, :map, default: %{}
-  attr :strategy_pools, :map, default: %{}
-  attr :selected_strategy, :any, default: nil
-  attr :target_validation_error, :string, default: nil
+  attr(:strategies, :list, required: true)
+  attr(:simulations, :list, required: true)
+  attr(:draws, :list, required: true)
+  attr(:live_attempts, :map, default: %{})
+  attr(:strategy_pools, :map, default: %{})
+  attr(:selected_strategy, :any, default: nil)
+  attr(:target_validation_error, :string, default: nil)
 
   def simulations_section(assigns) do
     ~H"""
@@ -466,11 +466,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategies, :list, required: true
-  attr :draws, :list, required: true
-  attr :selected_strategy, :any, default: nil
-  attr :strategy_pools, :map, default: %{}
-  attr :target_validation_error, :string, default: nil
+  attr(:strategies, :list, required: true)
+  attr(:draws, :list, required: true)
+  attr(:selected_strategy, :any, default: nil)
+  attr(:strategy_pools, :map, default: %{})
+  attr(:target_validation_error, :string, default: nil)
 
   defp simulation_form(assigns) do
     ~H"""
@@ -639,9 +639,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :simulations, :list, required: true
-  attr :live_attempts, :map, default: %{}
-  attr :strategy_pools, :map, default: %{}
+  attr(:simulations, :list, required: true)
+  attr(:live_attempts, :map, default: %{})
+  attr(:strategy_pools, :map, default: %{})
 
   defp simulations_table(assigns) do
     ~H"""
@@ -828,7 +828,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   @doc """
   Renders the ranking section with strategies sorted by performance.
   """
-  attr :strategies, :list, required: true
+  attr(:strategies, :list, required: true)
 
   def ranking_section(assigns) do
     strategies_with_scores =
@@ -881,8 +881,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategy, :map, required: true
-  attr :position, :integer, required: true
+  attr(:strategy, :map, required: true)
+  attr(:position, :integer, required: true)
 
   defp ranking_card(assigns) do
     ~H"""
@@ -940,7 +940,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategy, :map, required: true
+  attr(:strategy, :map, required: true)
 
   defp unranked_strategy_card(assigns) do
     ~H"""
@@ -972,8 +972,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   @doc """
   Renders the coupon generator section.
   """
-  attr :top_strategies, :list, required: true
-  attr :generated_coupons, :list, default: []
+  attr(:top_strategies, :list, required: true)
+  attr(:generated_coupons, :list, default: [])
 
   def generator_section(assigns) do
     ~H"""
@@ -1015,7 +1015,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategies, :list, required: true
+  attr(:strategies, :list, required: true)
 
   defp top_strategies_display(assigns) do
     ~H"""
@@ -1044,7 +1044,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :strategies, :list, required: true
+  attr(:strategies, :list, required: true)
 
   defp generator_form(assigns) do
     ~H"""
@@ -1080,7 +1080,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
-  attr :coupons, :list, required: true
+  attr(:coupons, :list, required: true)
 
   defp generated_coupons_display(assigns) do
     ~H"""

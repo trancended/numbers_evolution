@@ -35,10 +35,10 @@ defmodule NumbersEvolution.Events.Event do
   @foreign_key_type :binary_id
 
   schema "events" do
-    field :event_type, :string
-    field :metadata, :map
+    field(:event_type, :string)
+    field(:metadata, :map)
 
-    belongs_to :user, User
+    belongs_to(:user, User)
 
     # Events are immutable - only inserted_at, no updated_at
     timestamps(type: :utc_datetime, updated_at: false)

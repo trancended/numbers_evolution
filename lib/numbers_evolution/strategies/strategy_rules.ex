@@ -35,25 +35,25 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
   @primary_key false
   embedded_schema do
     embeds_one :main_numbers, MainNumbers, primary_key: false do
-      field :ratio_even_odd, {:array, :integer}
-      field :ratio_low_high, {:array, :integer}
-      field :preferred_hot, {:array, :integer}
-      field :preferred_cold, {:array, :integer}
+      field(:ratio_even_odd, {:array, :integer})
+      field(:ratio_low_high, {:array, :integer})
+      field(:preferred_hot, {:array, :integer})
+      field(:preferred_cold, {:array, :integer})
 
       embeds_one :weights, Weights, primary_key: false do
-        field :hot, :float
-        field :cold, :float
-        field :random, :float
+        field(:hot, :float)
+        field(:cold, :float)
+        field(:random, :float)
       end
     end
 
     embeds_one :euro_numbers, EuroNumbers, primary_key: false do
-      field :ratio_even_odd, {:array, :integer}
-      field :preferred, {:array, :integer}
+      field(:ratio_even_odd, {:array, :integer})
+      field(:preferred, {:array, :integer})
 
       embeds_one :weights, Weights, primary_key: false do
-        field :hot, :float
-        field :random, :float
+        field(:hot, :float)
+        field(:random, :float)
       end
     end
   end

@@ -39,13 +39,13 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:info} phx-mounted={show("#flash")}>Welcome Back!</.flash>
   """
-  attr :id, :string, doc: "the optional id of flash container"
-  attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
-  attr :title, :string, default: nil
-  attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
-  attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
+  attr(:id, :string, doc: "the optional id of flash container")
+  attr(:flash, :map, default: %{}, doc: "the map of flash messages to display")
+  attr(:title, :string, default: nil)
+  attr(:kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup")
+  attr(:rest, :global, doc: "the arbitrary HTML attributes to add to the flash container")
 
-  slot :inner_block, doc: "the optional inner block that renders the flash message"
+  slot(:inner_block, doc: "the optional inner block that renders the flash message")
 
   def flash(assigns) do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
@@ -90,10 +90,10 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Send!</.button>
       <.button navigate={~p"/"}>Home</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :string
-  attr :variant, :string, values: ~w(primary)
-  slot :inner_block, required: true
+  attr(:rest, :global, include: ~w(href navigate patch method download name value disabled))
+  attr(:class, :string)
+  attr(:variant, :string, values: ~w(primary))
+  slot(:inner_block, required: true)
 
   def button(%{rest: rest} = assigns) do
     variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
@@ -144,30 +144,33 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.input field={@form[:email]} type="email" />
       <.input name="my-input" errors={["oh no!"]} />
   """
-  attr :id, :any, default: nil
-  attr :name, :any
-  attr :label, :string, default: nil
-  attr :value, :any
+  attr(:id, :any, default: nil)
+  attr(:name, :any)
+  attr(:label, :string, default: nil)
+  attr(:value, :any)
 
-  attr :type, :string,
+  attr(:type, :string,
     default: "text",
     values: ~w(checkbox color date datetime-local email file month number password
                search select tel text textarea time url week)
+  )
 
-  attr :field, Phoenix.HTML.FormField,
+  attr(:field, Phoenix.HTML.FormField,
     doc: "a form field struct retrieved from the form, for example: @form[:email]"
+  )
 
-  attr :errors, :list, default: []
-  attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
-  attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
-  attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
-  attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
-  attr :class, :string, default: nil, doc: "the input class to use over defaults"
-  attr :error_class, :string, default: nil, doc: "the input error class to use over defaults"
+  attr(:errors, :list, default: [])
+  attr(:checked, :boolean, doc: "the checked flag for checkbox inputs")
+  attr(:prompt, :string, default: nil, doc: "the prompt for select inputs")
+  attr(:options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2")
+  attr(:multiple, :boolean, default: false, doc: "the multiple flag for select inputs")
+  attr(:class, :string, default: nil, doc: "the input class to use over defaults")
+  attr(:error_class, :string, default: nil, doc: "the input error class to use over defaults")
 
-  attr :rest, :global,
+  attr(:rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
                 multiple pattern placeholder readonly required rows size step)
+  )
 
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -284,9 +287,9 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   @doc """
   Renders a header with title.
   """
-  slot :inner_block, required: true
-  slot :subtitle
-  slot :actions
+  slot(:inner_block, required: true)
+  slot(:subtitle)
+  slot(:actions)
 
   def header(assigns) do
     ~H"""
@@ -314,20 +317,21 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         <:col :let={user} label="username">{user.username}</:col>
       </.table>
   """
-  attr :id, :string, required: true
-  attr :rows, :list, required: true
-  attr :row_id, :any, default: nil, doc: "the function for generating the row id"
-  attr :row_click, :any, default: nil, doc: "the function for handling phx-click on each row"
+  attr(:id, :string, required: true)
+  attr(:rows, :list, required: true)
+  attr(:row_id, :any, default: nil, doc: "the function for generating the row id")
+  attr(:row_click, :any, default: nil, doc: "the function for handling phx-click on each row")
 
-  attr :row_item, :any,
+  attr(:row_item, :any,
     default: &Function.identity/1,
     doc: "the function for mapping each row before calling the :col and :action slots"
+  )
 
   slot :col, required: true do
-    attr :label, :string
+    attr(:label, :string)
   end
 
-  slot :action, doc: "the slot for showing user actions in the last table column"
+  slot(:action, doc: "the slot for showing user actions in the last table column")
 
   def table(assigns) do
     assigns =
@@ -378,7 +382,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       </.list>
   """
   slot :item, required: true do
-    attr :title, :string, required: true
+    attr(:title, :string, required: true)
   end
 
   def list(assigns) do
@@ -412,8 +416,8 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.icon name="hero-x-mark" />
       <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
   """
-  attr :name, :string, required: true
-  attr :class, :string, default: "size-4"
+  attr(:name, :string, required: true)
+  attr(:class, :string, default: "size-4")
 
   def icon(%{name: "hero-" <> _} = assigns) do
     ~H"""
@@ -488,14 +492,14 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         </:actions>
       </.modal>
   """
-  attr :id, :string, required: true
-  attr :show, :boolean, default: false
-  attr :on_cancel, :any, default: nil
-  attr :data_cy, :string
+  attr(:id, :string, required: true)
+  attr(:show, :boolean, default: false)
+  attr(:on_cancel, :any, default: nil)
+  attr(:data_cy, :string)
 
-  slot :title
-  slot :inner_block, required: true
-  slot :actions
+  slot(:title)
+  slot(:inner_block, required: true)
+  slot(:actions)
 
   def modal(assigns) do
     ~H"""
@@ -554,13 +558,14 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.badge variant="primary">Primary</.badge>
       <.badge variant="success">Success</.badge>
   """
-  attr :variant, :string,
+  attr(:variant, :string,
     default: "neutral",
     values: ~w(neutral primary secondary accent success warning error info)
+  )
 
-  attr :size, :string, default: "md", values: ~w(xs sm md lg)
-  attr :class, :string, default: nil
-  slot :inner_block, required: true
+  attr(:size, :string, default: "md", values: ~w(xs sm md lg))
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
 
   def badge(assigns) do
     ~H"""
@@ -583,9 +588,9 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.ball number={7} type="main" />
       <.ball number={3} type="euro" />
   """
-  attr :number, :integer, required: true
-  attr :type, :string, default: "main", values: ~w(main euro)
-  attr :size, :string, default: "md", values: ~w(sm md lg)
+  attr(:number, :integer, required: true)
+  attr(:type, :string, default: "main", values: ~w(main euro))
+  attr(:size, :string, default: "md", values: ~w(sm md lg))
 
   def ball(assigns) do
     size_classes = %{
@@ -626,15 +631,16 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.alert kind="info">This is an info message</.alert>
       <.alert kind="error">Something went wrong</.alert>
   """
-  attr :kind, :string,
+  attr(:kind, :string,
     default: "info",
     values: ~w(info success warning error)
+  )
 
-  attr :title, :string, default: nil
-  attr :dismissible, :boolean, default: false
-  attr :on_dismiss, :any, default: nil
-  attr :class, :string, default: nil
-  slot :inner_block, required: true
+  attr(:title, :string, default: nil)
+  attr(:dismissible, :boolean, default: false)
+  attr(:on_dismiss, :any, default: nil)
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
 
   def alert(assigns) do
     ~H"""
@@ -685,9 +691,9 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.loading size="lg" />
       <.loading text="Loading..." />
   """
-  attr :size, :string, default: "md", values: ~w(xs sm md lg)
-  attr :text, :string, default: nil
-  attr :variant, :string, default: "spinner", values: ~w(spinner dots ring ball bars infinity)
+  attr(:size, :string, default: "md", values: ~w(xs sm md lg))
+  attr(:text, :string, default: nil)
+  attr(:variant, :string, default: "spinner", values: ~w(spinner dots ring ball bars infinity))
 
   def loading(assigns) do
     ~H"""
@@ -711,11 +717,11 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         </:action>
       </.empty_state>
   """
-  attr :icon, :string, required: true
+  attr(:icon, :string, required: true)
 
-  slot :title, required: true
-  slot :description
-  slot :action
+  slot(:title, required: true)
+  slot(:description)
+  slot(:action)
 
   def empty_state(assigns) do
     ~H"""
@@ -742,9 +748,10 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       <.status_indicator status="running" />
       <.status_indicator status="success" />
   """
-  attr :status, :string,
+  attr(:status, :string,
     required: true,
     values: ~w(pending running success timeout max_attempts_reached error)
+  )
 
   def status_indicator(assigns) do
     config = %{
@@ -808,12 +815,12 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         </:actions>
       </.card>
   """
-  attr :class, :string, default: nil
-  attr :compact, :boolean, default: false
+  attr(:class, :string, default: nil)
+  attr(:compact, :boolean, default: false)
 
-  slot :title
-  slot :inner_block, required: true
-  slot :actions
+  slot(:title)
+  slot(:inner_block, required: true)
+  slot(:actions)
 
   def card(assigns) do
     ~H"""
@@ -845,14 +852,15 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   - `type`: Either "main" for blue balls or "euro" for yellow balls
   - `size`: Size of the balls, defaults to "sm"
   """
-  attr :numbers, :list, required: true, doc: "List of numbers to display"
+  attr(:numbers, :list, required: true, doc: "List of numbers to display")
 
-  attr :type, :string,
+  attr(:type, :string,
     values: ["main", "euro"],
     required: true,
     doc: "Type of numbers (main or euro)"
+  )
 
-  attr :size, :string, values: ["xs", "sm", "md", "lg"], default: "sm", doc: "Size of the balls"
+  attr(:size, :string, values: ["xs", "sm", "md", "lg"], default: "sm", doc: "Size of the balls")
 
   def number_ball(assigns) do
     base_classes =

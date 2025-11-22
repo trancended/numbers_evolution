@@ -6,5 +6,5 @@ defmodule NumbersEvolutionWeb.PageHTML do
   """
   use NumbersEvolutionWeb, :html
 
-  embed_templates "page_html/*"
+  embed_templates("page_html/*")
 end

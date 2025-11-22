@@ -37,19 +37,19 @@ defmodule NumbersEvolution.Simulations.Simulation do
   @foreign_key_type :binary_id
 
   schema "simulations" do
-    field :attempts_count, :integer, default: 0
-    field :duration_seconds, :float, default: 0.0
-    field :status, :string
-    field :options, :map, default: %{}
-    field :is_favorite, :boolean, default: false
-    field :started_at, :utc_datetime
-    field :completed_at, :utc_datetime
+    field(:attempts_count, :integer, default: 0)
+    field(:duration_seconds, :float, default: 0.0)
+    field(:status, :string)
+    field(:options, :map, default: %{})
+    field(:is_favorite, :boolean, default: false)
+    field(:started_at, :utc_datetime)
+    field(:completed_at, :utc_datetime)
 
-    embeds_one :result, SimulationResult
+    embeds_one(:result, SimulationResult)
 
-    belongs_to :user, User
-    belongs_to :strategy, Strategy
-    belongs_to :target_draw, Draw
+    belongs_to(:user, User)
+    belongs_to(:strategy, Strategy)
+    belongs_to(:target_draw, Draw)
 
     timestamps(type: :utc_datetime)
   end

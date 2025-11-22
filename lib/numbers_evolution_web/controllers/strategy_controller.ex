@@ -7,7 +7,7 @@ defmodule NumbersEvolutionWeb.StrategyController do
 
   alias NumbersEvolution.Strategies
 
-  action_fallback NumbersEvolutionWeb.FallbackController
+  action_fallback(NumbersEvolutionWeb.FallbackController)
 
   # GET /api/strategies
   def index(conn, params) do

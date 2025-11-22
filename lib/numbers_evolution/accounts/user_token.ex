@@ -19,10 +19,10 @@ defmodule NumbersEvolution.Accounts.UserToken do
   @foreign_key_type :binary_id
 
   schema "users_tokens" do
-    field :token, :binary
-    field :context, :string
-    field :sent_to, :string
-    belongs_to :user, User, type: :binary_id
+    field(:token, :binary)
+    field(:context, :string)
+    field(:sent_to, :string)
+    belongs_to(:user, User, type: :binary_id)
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -55,10 +55,11 @@ defmodule NumbersEvolution.Accounts.UserToken do
         hashed_token = :crypto.hash(@hash_algorithm, decoded_token)
 
         query =
-          from token in by_token_and_context_query(hashed_token, "session"),
+          from(token in by_token_and_context_query(hashed_token, "session"),
             join: user in assoc(token, :user),
             where: token.inserted_at > ago(@session_validity_in_days, "day"),
             select: user
+          )
 
         {:ok, query}
 
@@ -72,7 +73,7 @@ defmodule NumbersEvolution.Accounts.UserToken do
   """
   @spec by_token_and_context_query(binary(), String.t()) :: Ecto.Query.t()
   def by_token_and_context_query(token, context) do
-    from UserToken, where: [token: ^token, context: ^context]
+    from(UserToken, where: [token: ^token, context: ^context])
   end
 
   @doc """
@@ -80,6 +81,6 @@ defmodule NumbersEvolution.Accounts.UserToken do
   """
   @spec by_user_query(User.t()) :: Ecto.Query.t()
   def by_user_query(user) do
-    from t in UserToken, where: t.user_id == ^user.id
+    from(t in UserToken, where: t.user_id == ^user.id)
   end
 end

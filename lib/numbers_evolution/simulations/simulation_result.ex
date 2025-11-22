@@ -27,22 +27,22 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
   @primary_key false
   embedded_schema do
     # Success fields
-    field :matched_main, {:array, :integer}
-    field :matched_euro, {:array, :integer}
-    field :attempts_count, :integer
+    field(:matched_main, {:array, :integer})
+    field(:matched_euro, {:array, :integer})
+    field(:attempts_count, :integer)
 
     # Timeout/Error fields
-    field :reason, :string
-    field :limit_reached, :string
-    field :error_message, :string
+    field(:reason, :string)
+    field(:limit_reached, :string)
+    field(:error_message, :string)
 
     # Duplicate tracking fields
-    field :duplicates_skipped, :integer
-    field :unique_attempts, :integer
+    field(:duplicates_skipped, :integer)
+    field(:unique_attempts, :integer)
 
     embeds_one :final_draw, FinalDraw, primary_key: false do
-      field :main_numbers, {:array, :integer}
-      field :euro_numbers, {:array, :integer}
+      field(:main_numbers, {:array, :integer})
+      field(:euro_numbers, {:array, :integer})
     end
   end
 

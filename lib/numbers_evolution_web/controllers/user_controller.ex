@@ -7,7 +7,7 @@ defmodule NumbersEvolutionWeb.UserController do
 
   alias NumbersEvolution.Accounts
 
-  action_fallback NumbersEvolutionWeb.FallbackController
+  action_fallback(NumbersEvolutionWeb.FallbackController)
 
   # POST /api/users/register
   def register(conn, %{"user" => user_params}) do

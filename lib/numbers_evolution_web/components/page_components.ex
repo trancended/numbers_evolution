@@ -15,8 +15,8 @@ defmodule NumbersEvolutionWeb.PageComponents do
   @doc """
   Renders the main navigation bar (desktop) and drawer (mobile).
   """
-  attr :active_section, :atom, required: true
-  attr :current_user, :map, required: true
+  attr(:active_section, :atom, required: true)
+  attr(:current_user, :map, required: true)
 
   def navbar(assigns) do
     ~H"""
@@ -182,9 +182,9 @@ defmodule NumbersEvolutionWeb.PageComponents do
   @doc """
   Renders the landing page for unauthenticated users.
   """
-  attr :show_register_form, :boolean, default: false
-  attr :show_login_form, :boolean, default: false
-  attr :form, :map, default: nil
+  attr(:show_register_form, :boolean, default: false)
+  attr(:show_login_form, :boolean, default: false)
+  attr(:form, :map, default: nil)
 
   def landing_section(assigns) do
     ~H"""
@@ -342,9 +342,9 @@ defmodule NumbersEvolutionWeb.PageComponents do
     """
   end
 
-  attr :icon, :string, required: true
-  attr :title, :string, required: true
-  attr :description, :string, required: true
+  attr(:icon, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:description, :string, required: true)
 
   defp feature_card(assigns) do
     ~H"""
@@ -365,14 +365,15 @@ defmodule NumbersEvolutionWeb.PageComponents do
   @doc """
   Renders the dashboard with user stats and quick actions.
   """
-  attr :current_user, :map, required: true
+  attr(:current_user, :map, required: true)
 
-  attr :user_stats, :map,
+  attr(:user_stats, :map,
     default: %{strategies_count: 0, simulations_count: 0, best_strategy: nil}
+  )
 
-  attr :recent_simulations, :list, default: []
-  attr :live_attempts, :map, default: %{}
-  attr :strategy_pools, :map, default: %{}
+  attr(:recent_simulations, :list, default: [])
+  attr(:live_attempts, :map, default: %{})
+  attr(:strategy_pools, :map, default: %{})
 
   def dashboard_section(assigns) do
     ~H"""
@@ -645,9 +646,9 @@ defmodule NumbersEvolutionWeb.PageComponents do
 
   defp format_number(number), do: to_string(number)
 
-  attr :icon, :string, required: true
-  attr :title, :string, required: true
-  attr :value, :string, required: true
+  attr(:icon, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:value, :string, required: true)
 
   defp stat_card(assigns) do
     ~H"""
