@@ -1,6 +1,7 @@
 {
   "name": "numbers_evolution_e2e",
   "version": "1.0.0",
+  "type": "module",
   "description": "E2E tests for Numbers Evolution application",
   "scripts": {
     "cypress:open": "cypress open",
