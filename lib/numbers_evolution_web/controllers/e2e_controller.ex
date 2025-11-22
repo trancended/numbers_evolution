@@ -1,6 +1,7 @@
 defmodule NumbersEvolutionWeb.E2eController do
   use NumbersEvolutionWeb, :controller
 
+  alias NumbersEvolution.Accounts
   alias NumbersEvolution.Repo
 
   def reset_db(conn, _params) do
@@ -33,7 +34,7 @@ defmodule NumbersEvolutionWeb.E2eController do
 
         # Create a test user
         {:ok, user} =
-          NumbersEvolution.Accounts.register_user(%{
+          Accounts.register_user(%{
             email: "test@example.com",
             password: "testpassword123",
             password_confirmation: "testpassword123"
