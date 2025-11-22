@@ -6,12 +6,11 @@ config :numbers_evolution, NumbersEvolution.Repo,
   password: "postgres",
   hostname: "localhost",
   database: "numbers_evolution_e2e",
-  pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
 # Run server for E2E tests
 config :numbers_evolution, NumbersEvolutionWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4000],
+  http: [ip: {0, 0, 0, 0}, port: 4000],
   secret_key_base: "U0ZJ6WUkQ2V39V6Z6p9uiYu9Ylm0TAezBEhxUhigJRQKyCSp7KJ7dFB4MDQ251vG",
   server: true
 

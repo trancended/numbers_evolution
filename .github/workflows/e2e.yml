@@ -81,8 +81,22 @@ jobs:
 
     - name: Start Phoenix server in background
       run: |
+        echo "Starting Phoenix server..."
         mix phx.server &
-        echo $! > phoenix.pid
+        SERVER_PID=$!
+        echo $SERVER_PID > phoenix.pid
+        echo "Server started with PID: $SERVER_PID"
+
+        # Give server a moment to start
+        sleep 3
+
+        # Check if process is still running
+        if kill -0 $SERVER_PID 2>/dev/null; then
+          echo "Phoenix server process is running"
+        else
+          echo "Phoenix server process failed to start"
+          exit 1
+        fi
       env:
         MIX_ENV: test_e2e
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
@@ -93,13 +107,34 @@ jobs:
     - name: Wait for server to be ready
       run: |
         echo "Waiting for Phoenix server to start..."
-        timeout 60 bash -c 'until curl -f http://localhost:4000 2>/dev/null; do echo "Waiting for server..."; sleep 2; done'
-        echo "Phoenix server is responding!"
-        
+        for i in {1..30}; do
+          if curl -f http://localhost:4000 > /dev/null 2>&1; then
+            echo "Phoenix server is responding on attempt $i!"
+            break
+          fi
+          echo "Attempt $i: Server not ready yet, waiting..."
+          sleep 2
+          if [ $i -eq 30 ]; then
+            echo "Server failed to start after 60 seconds"
+            exit 1
+          fi
+        done
+
         echo "Testing E2E endpoint availability..."
-        sleep 5
-        curl -v -X POST http://localhost:4000/api/e2e/reset-db 2>&1 | grep -E "(HTTP|status|message)" || true
-        echo "E2E endpoint check complete!"
+        sleep 2
+
+        # Test the E2E reset endpoint
+        echo "Testing /api/e2e/reset-db endpoint..."
+        RESPONSE=$(curl -s -X POST http://localhost:4000/api/e2e/reset-db -H "Content-Type: application/json")
+        echo "E2E endpoint response: $RESPONSE"
+
+        # Check if response contains success status
+        if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+          echo "E2E endpoint is working correctly!"
+        else
+          echo "E2E endpoint test failed!"
+          exit 1
+        fi
 
     - name: Run Cypress tests
       run: npx cypress run --config-file cypress.config.js

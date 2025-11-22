@@ -34,9 +34,10 @@ defmodule NumbersEvolution.Application do
       end
 
       # Setup E2E test database after Repo is ready
-      if Mix.env() == :test_e2e do
-        :ok = setup_e2e_database_after_repo_ready()
-      end
+      # Note: E2E tests handle database setup via API endpoints
+      # if Mix.env() == :test_e2e do
+      #   :ok = setup_e2e_database_after_repo_ready()
+      # end
 
       {:ok, pid}
     end
