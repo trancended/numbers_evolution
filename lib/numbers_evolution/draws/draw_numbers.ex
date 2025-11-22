@@ -14,8 +14,8 @@ defmodule NumbersEvolution.Draws.DrawNumbers do
 
   @primary_key false
   embedded_schema do
-    field :main_numbers, {:array, :integer}
-    field :euro_numbers, {:array, :integer}
+    field(:main_numbers, {:array, :integer})
+    field(:euro_numbers, {:array, :integer})
   end
 
   @doc """

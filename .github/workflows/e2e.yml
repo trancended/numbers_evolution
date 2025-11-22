@@ -1,0 +1,160 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+          node_modules
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Install Elixir dependencies
+      run: mix deps.get
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Compile application
+      run: mix compile
+      env:
+        MIX_ENV: test_e2e
+
+    - name: Setup assets
+      run: mix assets.setup
+
+    - name: Build assets
+      run: mix assets.build
+
+    - name: Start Phoenix server in background
+      run: |
+        echo "Starting Phoenix server..."
+        mix phx.server &
+        SERVER_PID=$!
+        echo $SERVER_PID > phoenix.pid
+        echo "Server started with PID: $SERVER_PID"
+
+        # Give server a moment to start
+        sleep 3
+
+        # Check if process is still running
+        if kill -0 $SERVER_PID 2>/dev/null; then
+          echo "Phoenix server process is running"
+        else
+          echo "Phoenix server process failed to start"
+          exit 1
+        fi
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use_must_be_at_least_64_chars_long
+        PHX_HOST: localhost
+        PORT: 4000
+
+    - name: Wait for server to be ready
+      run: |
+        echo "Waiting for Phoenix server to start..."
+        for i in {1..30}; do
+          if curl -f http://127.0.0.1:4000 > /dev/null 2>&1; then
+            echo "Phoenix server is responding on attempt $i!"
+            break
+          fi
+          echo "Attempt $i: Server not ready yet, waiting..."
+          sleep 2
+          if [ $i -eq 30 ]; then
+            echo "Server failed to start after 60 seconds"
+            exit 1
+          fi
+        done
+
+        echo "Testing E2E endpoint availability..."
+        sleep 2
+
+        # Test the E2E reset endpoint
+        echo "Testing /api/e2e/reset-db endpoint..."
+        RESPONSE=$(curl -s -X POST http://127.0.0.1:4000/api/e2e/reset-db -H "Content-Type: application/json")
+        echo "E2E endpoint response: $RESPONSE"
+
+        # Check if response contains success status
+        if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+          echo "E2E endpoint is working correctly!"
+        else
+          echo "E2E endpoint test failed!"
+          exit 1
+        fi
+
+    - name: Run Cypress tests
+      run: npx cypress run --config-file cypress.config.js
+      env:
+        CYPRESS_baseUrl: http://127.0.0.1:4000
+
+    - name: Stop Phoenix server
+      if: always()
+      run: |
+        if [ -f phoenix.pid ]; then
+          kill $(cat phoenix.pid) || true
+          rm phoenix.pid
+        fi
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: cypress-artifacts
+        path: |
+          cypress/videos/
+          cypress/screenshots/
+        retention-days: 7

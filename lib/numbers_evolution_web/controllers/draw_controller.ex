@@ -7,7 +7,7 @@ defmodule NumbersEvolutionWeb.DrawController do
 
   alias NumbersEvolution.Draws
 
-  action_fallback NumbersEvolutionWeb.FallbackController
+  action_fallback(NumbersEvolutionWeb.FallbackController)
 
   # GET /api/draws
   def index(conn, params) do

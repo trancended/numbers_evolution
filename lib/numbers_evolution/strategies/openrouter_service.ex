@@ -13,6 +13,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
 
   @behaviour NumbersEvolution.AIProvider
 
+  alias NumbersEvolution.AIProvider.Mock
   alias NumbersEvolution.Client.OpenRouterClient
 
   # Rate limiting constants
@@ -193,7 +194,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
       {:error, :api_key_missing} ->
         # Fallback to mock when API key is missing
         Logger.info("OpenRouter API key missing, falling back to mock implementation")
-        NumbersEvolution.AIProvider.Mock.generate_strategy(prompt)
+        Mock.generate_strategy(prompt)
 
       {:error, reason} ->
         Logger.warning("OpenRouter strategy generation failed: #{inspect(reason)}")

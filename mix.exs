@@ -10,7 +10,7 @@ defmodule NumbersEvolution.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      compilers: [:phoenix_live_view] ++ Mix.compilers(),
+      compilers: Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
   end
@@ -33,6 +33,7 @@ defmodule NumbersEvolution.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test_e2e), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.

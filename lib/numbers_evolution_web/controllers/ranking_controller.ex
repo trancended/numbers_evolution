@@ -9,7 +9,7 @@ defmodule NumbersEvolutionWeb.RankingController do
   alias NumbersEvolution.Repo
   alias NumbersEvolution.Strategies.Strategy
 
-  action_fallback NumbersEvolutionWeb.FallbackController
+  action_fallback(NumbersEvolutionWeb.FallbackController)
 
   # GET /api/rankings/strategies
   def strategies(conn, params) do
@@ -36,7 +36,7 @@ defmodule NumbersEvolutionWeb.RankingController do
     offset = (page - 1) * per_page
 
     query =
-      from s in Strategy,
+      from(s in Strategy,
         where: s.user_id == ^user.id,
         where: s.status == :active,
         where: not is_nil(s.performance_score),
@@ -58,6 +58,7 @@ defmodule NumbersEvolutionWeb.RankingController do
         order_by: [desc: s.performance_score],
         limit: ^per_page,
         offset: ^offset
+      )
 
     rankings = Repo.all(query)
 

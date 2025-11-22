@@ -8,7 +8,8 @@ defmodule NumbersEvolution.Application do
   @impl true
   def start(_type, _args) do
     # Initialize ETS table for rate limiting
-    NumbersEvolutionWeb.Plugs.RateLimiter.init_table()
+    :ets.new(:rate_limiter, [:set, :public, :named_table])
+    :ets.insert(:rate_limiter, {:last_request, System.system_time(:second)})
 
     children = [
       NumbersEvolutionWeb.Telemetry,
@@ -33,9 +34,7 @@ defmodule NumbersEvolution.Application do
       end
 
       # Setup E2E test database after Repo is ready
-      if Mix.env() == :test_e2e do
-        :ok = setup_e2e_database_after_repo_ready()
-      end
+      # Note: E2E tests handle database setup via API endpoints
 
       {:ok, pid}
     end
@@ -49,32 +48,6 @@ defmodule NumbersEvolution.Application do
       fn ->
         Process.sleep(2000)
         NumbersEvolution.Simulations.start_pending_simulations()
-      end
-    )
-
-    :ok
-  end
-
-  # Setup E2E test database after Repo is ready
-  defp setup_e2e_database_after_repo_ready do
-    # Wait a bit for Repo to be ready, then check/setup E2E database
-    Task.Supervisor.start_child(
-      NumbersEvolution.TaskSupervisor,
-      fn ->
-        Process.sleep(1000)
-
-        IO.puts("Setting up E2E test database...")
-
-        try do
-          # Always reset database for E2E tests
-          Mix.Task.run("e2e_db", ["reset"])
-          IO.puts("E2E test database setup complete")
-        rescue
-          error ->
-            IO.puts("Failed to setup E2E test database: #{inspect(error)}")
-            IO.puts("Make sure PostgreSQL is running and credentials are correct")
-            # Don't halt in E2E - let tests handle this
-        end
       end
     )
 

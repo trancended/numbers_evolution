@@ -161,6 +161,33 @@ mix phx.server
 - `mix test --cover` - Run tests with coverage report
 - `mix test test/path/to/test.exs` - Run a specific test file
 
+### E2E Testing
+
+**Important:** E2E tests require the server to run in `test_e2e` environment.
+
+1. **Setup E2E database:**
+   ```bash
+   MIX_ENV=test_e2e mix ecto.create
+   MIX_ENV=test_e2e mix ecto.migrate
+   ```
+
+2. **Start server in test_e2e environment:**
+   ```bash
+   MIX_ENV=test_e2e mix phx.server
+   ```
+
+3. **Run Cypress tests (in separate terminal):**
+   ```bash
+   npm run cypress:run
+   ```
+
+   Or use the all-in-one command:
+   ```bash
+   npm run e2e:test
+   ```
+
+See `cypress/README.md` for detailed E2E testing instructions.
+
 ### Code Quality
 
 - `mix format` - Format code according to Elixir style guide

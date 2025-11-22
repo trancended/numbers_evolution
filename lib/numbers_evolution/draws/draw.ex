@@ -28,13 +28,13 @@ defmodule NumbersEvolution.Draws.Draw do
   @foreign_key_type :binary_id
 
   schema "draws" do
-    field :draw_date, :date
-    field :game_type, :string
-    field :source, :string
+    field(:draw_date, :date)
+    field(:game_type, :string)
+    field(:source, :string)
 
-    embeds_one :numbers, DrawNumbers
+    embeds_one(:numbers, DrawNumbers)
 
-    has_many :simulations, Simulation, foreign_key: :target_draw_id
+    has_many(:simulations, Simulation, foreign_key: :target_draw_id)
 
     timestamps(type: :utc_datetime)
   end

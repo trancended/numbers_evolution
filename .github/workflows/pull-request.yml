@@ -1,0 +1,330 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  lint:
+    name: Lint & Compile
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Compile with warnings as errors
+      run: mix compile --force --warnings-as-errors
+      env:
+        MIX_ENV: test
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run Credo
+      run: mix credo
+
+    - name: Run tests
+      run: mix test
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run unit tests
+      run: mix test
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+          node_modules
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Install Elixir dependencies
+      run: mix deps.get
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Compile application
+      run: mix compile
+      env:
+        MIX_ENV: test_e2e
+
+    - name: Setup assets
+      run: mix assets.setup
+
+    - name: Build assets
+      run: mix assets.build
+
+    - name: Start Phoenix server in background
+      run: |
+        mix phx.server &
+        echo $! > phoenix.pid
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use_must_be_at_least_64_chars_long
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-v1-dummy-key-for-ci-testing-only' }}
+        PHX_HOST: localhost
+        PORT: 4000
+
+    - name: Wait for server to be ready
+      run: |
+        echo "Waiting for Phoenix server to start..."
+        timeout 60 bash -c 'until curl -f http://localhost:4000 2>/dev/null; do echo "Waiting for server..."; sleep 2; done'
+        echo "Phoenix server is responding!"
+        
+        echo "Testing E2E endpoint availability..."
+        sleep 5
+        curl -v -X POST http://localhost:4000/api/e2e/reset-db 2>&1 | grep -E "(HTTP|status|message)" || true
+        echo "E2E endpoint check complete!"
+
+    - name: Run Cypress tests
+      run: npx cypress run --config-file cypress.config.js
+      env:
+        CYPRESS_baseUrl: http://localhost:4000
+
+    - name: Stop Phoenix server
+      if: always()
+      run: |
+        if [ -f phoenix.pid ]; then
+          kill $(cat phoenix.pid) || true
+          rm phoenix.pid
+        fi
+
+    - name: Upload E2E test results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: e2e-results
+        path: |
+          cypress/videos/
+          cypress/screenshots/
+        retention-days: 7
+
+  status-comment:
+    name: Status Comment
+    runs-on: ubuntu-latest
+    needs: [lint, unit-test, e2e-test]
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create status comment
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: pullRequest } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number
+          });
+
+          const jobs = ${{ toJSON(needs) }};
+          let status = '✅ All checks passed!';
+          let details = '';
+
+          const jobStatus = {
+            lint: jobs.lint.result,
+            'unit-test': jobs['unit-test'].result,
+            'e2e-test': jobs['e2e-test'].result
+          };
+
+          const failedJobs = Object.entries(jobStatus).filter(([_, result]) => result !== 'success');
+
+          if (failedJobs.length > 0) {
+            status = '❌ Some checks failed';
+            details = '\n\nFailed jobs:\n' + failedJobs.map(([job, result]) => `- ${job}: ${result}`).join('\n');
+          }
+
+          const body = `## CI Status Report
+
+          **Pull Request:** #${context.issue.number}
+          **Branch:** \`${pullRequest.head.ref}\`
+
+          ${status}${details}
+
+          ### Job Results:
+          - **Lint & Compile**: ${jobStatus.lint === 'success' ? '✅' : '❌'} ${jobStatus.lint}
+          - **Unit Tests**: ${jobStatus['unit-test'] === 'success' ? '✅' : '❌'} ${jobStatus['unit-test']}
+          - **E2E Tests**: ${jobStatus['e2e-test'] === 'success' ? '✅' : '❌'} ${jobStatus['e2e-test']}
+
+          _Generated by GitHub Actions_`;
+
+          // Delete previous status comments
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number
+          });
+
+          const statusComments = comments.filter(comment =>
+            comment.body.includes('CI Status Report') && comment.user.type === 'Bot'
+          );
+
+          for (const comment of statusComments) {
+            await github.rest.issues.deleteComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: comment.id
+            });
+          }
+
+          // Create new status comment
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body
+          });

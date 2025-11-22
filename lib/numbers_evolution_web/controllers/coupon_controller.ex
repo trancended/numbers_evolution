@@ -8,7 +8,7 @@ defmodule NumbersEvolutionWeb.CouponController do
   alias NumbersEvolution.Strategies
   alias NumbersEvolution.Strategies.Generator
 
-  action_fallback NumbersEvolutionWeb.FallbackController
+  action_fallback(NumbersEvolutionWeb.FallbackController)
 
   # POST /api/coupons/generate
   def generate(conn, %{
@@ -91,12 +91,13 @@ defmodule NumbersEvolutionWeb.CouponController do
     import Ecto.Query
 
     query =
-      from s in NumbersEvolution.Strategies.Strategy,
+      from(s in NumbersEvolution.Strategies.Strategy,
         where: s.user_id == ^user.id,
         where: s.status == :active,
         where: not is_nil(s.performance_score),
         order_by: [desc: s.performance_score],
         limit: 1
+      )
 
     case NumbersEvolution.Repo.one(query) do
       nil -> {:error, :no_strategies}

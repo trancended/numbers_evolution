@@ -1,0 +1,531 @@
+# GitHub Actions Documentation - Numbers Evolution
+
+## Overview
+
+This document provides comprehensive GitHub Actions setup for the Numbers Evolution project, a Phoenix LiveView application that helps users create and test Eurojackpot lottery strategies using AI assistance.
+
+## Project Context
+
+**Numbers Evolution** is an educational Phoenix application featuring:
+- **Tech Stack**: Elixir/Phoenix LiveView, PostgreSQL, TailwindCSS
+- **Core Features**: AI-powered strategy generation, lottery simulations, real-time tracking
+- **Testing**: ExUnit for unit tests, Cypress for E2E tests
+- **CI/CD**: Automated testing and quality checks via GitHub Actions
+
+## GitHub Actions Workflows
+
+### 1. Main CI Pipeline (`.github/workflows/ci.yml`)
+
+This workflow handles continuous integration for every push and pull request.
+
+```yaml:.github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run tests
+      run: mix test
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run precommit checks
+      run: mix precommit
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Check code formatting
+      run: mix format --check-formatted
+
+    - name: Run Credo
+      run: mix credo --strict
+
+    - name: Check for unused dependencies
+      run: mix deps.unlock --check-unused
+```
+
+### 2. E2E Testing Pipeline (`.github/workflows/e2e.yml`)
+
+Dedicated workflow for end-to-end tests using Cypress.
+
+```yaml:.github/workflows/e2e.yml
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+          node_modules
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Install Elixir dependencies
+      run: mix deps.get
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+
+    - name: Build assets
+      run: mix assets.build
+
+    - name: Start Phoenix server
+      run: mix phx.server
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use
+        PHX_HOST: localhost
+        PORT: 4000
+
+    - name: Wait for server to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:4000; do sleep 1; done'
+
+    - name: Run Cypress tests
+      run: npx cypress run --config-file cypress.config.js
+      env:
+        CYPRESS_baseUrl: http://localhost:4000
+```
+
+### 3. Deployment Pipeline (`.github/workflows/deploy.yml`)
+
+Optional deployment workflow for production releases.
+
+```yaml:.github/workflows/deploy.yml
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+          node_modules
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Install Elixir dependencies
+      run: mix deps.get
+
+    - name: Install Node.js dependencies
+      run: npm ci
+
+    - name: Create database
+      run: mix ecto.create
+      env:
+        MIX_ENV: prod
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      env:
+        MIX_ENV: prod
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Build assets for production
+      run: mix assets.deploy
+
+    - name: Build release
+      run: mix release
+      env:
+        MIX_ENV: prod
+        SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    - name: Deploy to server
+      run: echo "Deploy step - configure based on your hosting provider (Fly.io, etc.)"
+      # Add your deployment commands here
+```
+
+### 4. Security Scanning (`.github/workflows/security.yml`)
+
+Workflow for security vulnerability scanning.
+
+```yaml:.github/workflows/security.yml
+name: Security Scan
+
+on:
+  schedule:
+    # Run weekly on Mondays
+    - cron: '0 0 * * 1'
+  push:
+    branches: [ main ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15'
+        otp-version: '26'
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Run Sobelow security scanner
+      run: |
+        mix deps.get
+        if command -v sobelow >/dev/null 2>&1; then
+          mix sobelow --config
+        else
+          echo "Sobelow not installed - consider adding {:sobelow, \"~> 0.11\", only: [:dev, :test]} to mix.exs"
+        fi
+
+    - name: Audit dependencies
+      run: mix deps.audit
+
+    - name: Check for vulnerabilities
+      run: mix hex.audit
+```
+
+## Configuration Files
+
+### 1. Required Secrets
+
+For production deployment, set these secrets in your GitHub repository:
+
+- `DATABASE_URL`: PostgreSQL connection string
+- `SECRET_KEY_BASE`: Phoenix secret key base (generate with `mix phx.gen.secret`)
+- `OPENAI_API_KEY`: For AI strategy generation (if used in production)
+
+### 2. Environment Variables
+
+Create `.env.ci` for local testing (add to `.gitignore`):
+
+```bash
+# Database
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+
+# Phoenix
+SECRET_KEY_BASE=your_secret_key_here
+PHX_HOST=localhost
+PORT=4000
+
+# OpenAI (optional for tests)
+OPENAI_API_KEY=your_openai_key_here
+```
+
+### 3. Cypress Configuration
+
+Your `cypress.config.js` should be configured for CI:
+
+```javascript
+const { defineConfig } = require('cypress')
+
+module.exports = defineConfig({
+  e2e: {
+    baseUrl: process.env.CYPRESS_baseUrl || 'http://localhost:4000',
+    specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}',
+    supportFile: 'cypress/support/e2e.js',
+    video: true,
+    screenshotOnRunFailure: true,
+    defaultCommandTimeout: 10000,
+    requestTimeout: 15000,
+    responseTimeout: 15000,
+  },
+})
+```
+
+## Workflow Explanations
+
+### CI Pipeline Features
+
+1. **Multi-Environment Testing**: Separate test environments for unit tests and E2E tests
+2. **Caching**: Dependencies cached to speed up builds
+3. **Database Setup**: PostgreSQL service with health checks
+4. **Quality Gates**: Formatting, Credo linting, and dependency checks
+5. **Precommit Alias**: Uses the existing `mix precommit` alias for consistency
+
+### E2E Testing Strategy
+
+1. **Isolated Environment**: Uses `test_e2e` Mix environment
+2. **Server Startup**: Phoenix server runs in background during tests
+3. **Health Checks**: Ensures server is ready before running Cypress
+4. **Video Recording**: Failed tests recorded for debugging
+
+### Deployment Strategy
+
+1. **Tag-Based**: Triggers only on version tags (v*)
+2. **Production Build**: Optimized assets and release build
+3. **Environment-Specific**: Uses production environment variables
+4. **Flexible**: Can be adapted for Fly.io, Heroku, or other platforms
+
+## Local Development Setup
+
+### Prerequisites
+
+```bash
+# Install Elixir 1.15+
+# Install Erlang/OTP 26+
+# Install PostgreSQL 15+
+# Install Node.js 18+
+```
+
+### Running Tests Locally
+
+```bash
+# Install dependencies
+mix deps.get
+npm install
+
+# Setup database
+mix ecto.setup
+
+# Run unit tests
+mix test
+
+# Run E2E tests locally
+mix phx.server
+# In another terminal:
+npx cypress open
+```
+
+### Pre-commit Checks
+
+```bash
+# Run all quality checks
+mix precommit
+
+# Individual checks
+mix format --check-formatted  # Code formatting
+mix credo --strict           # Code quality
+mix deps.unlock --check-unused  # Unused dependencies
+mix test                      # Run tests
+```
+
+## Monitoring and Maintenance
+
+### Workflow Status Badges
+
+Add these badges to your README.md:
+
+```markdown
+[![CI](https://github.com/yourusername/numbers_evolution/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/numbers_evolution/actions/workflows/ci.yml)
+[![E2E Tests](https://github.com/yourusername/numbers_evolution/actions/workflows/e2e.yml/badge.svg)](https://github.com/yourusername/numbers_evolution/actions/workflows/e2e.yml)
+[![Security Scan](https://github.com/yourusername/numbers_evolution/actions/workflows/security.yml/badge.svg)](https://github.com/yourusername/numbers_evolution/actions/workflows/security.yml)
+```
+
+### Cost Optimization
+
+1. **Caching**: Reduces build times and API usage
+2. **Conditional Jobs**: E2E tests only run when needed
+3. **Scheduled Security Scans**: Weekly instead of daily
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **Database Connection Issues**: Ensure PostgreSQL service is healthy
+2. **Asset Build Failures**: Check Node.js version compatibility
+3. **E2E Test Timeouts**: Increase timeout values in Cypress config
+4. **Memory Issues**: Consider using larger runners for E2E tests
+
+**Debugging Failed Runs:**
+
+1. Check workflow logs in GitHub Actions tab
+2. Enable debug logging: `ACTIONS_STEP_DEBUG: true`
+3. Use `mix test --trace` for detailed test output
+4. Run E2E tests locally with `npx cypress run --record false`
+
+## Future Enhancements
+
+1. **Performance Testing**: Add k6 or similar for load testing
+2. **Dependency Updates**: Automated PRs for dependency updates
+3. **Code Coverage**: Add coverage reporting with Coveralls
+4. **Multi-Environment**: Separate staging and production deployments
+5. **Notification Integrations**: Slack/Discord notifications on failures
+
+## Phoenix-Specific Considerations
+
+### LiveView Testing
+
+The CI pipeline focuses on unit tests for business logic. LiveView integration tests can be added using `Phoenix.LiveViewTest`:
+
+```elixir
+# Example LiveView test
+test "renders strategy form", %{conn: conn} do
+  {:ok, view, html} = live(conn, "/strategies/new")
+  assert html =~ "Create Strategy"
+end
+```
+
+### Asset Pipeline
+
+The workflow properly handles the Phoenix asset pipeline:
+- Development: `mix assets.build`
+- Production: `mix assets.deploy` (minification enabled)
+
+### Database Considerations
+
+- Uses PostgreSQL 15 (matching production requirements)
+- Separate databases for test and e2e environments
+- Proper cleanup between runs
+
+This GitHub Actions setup provides a robust foundation for the Numbers Evolution project, ensuring code quality, automated testing, and reliable deployments.

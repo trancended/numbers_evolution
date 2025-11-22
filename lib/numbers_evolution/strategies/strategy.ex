@@ -35,18 +35,18 @@ defmodule NumbersEvolution.Strategies.Strategy do
   @foreign_key_type :binary_id
 
   schema "strategies" do
-    field :name, :string
-    field :type, :string
-    field :status, :string, default: "active"
-    field :description, :string
-    field :ai_prompt, :string
-    field :performance_score, :float
-    field :simulations_count, :integer, virtual: true
+    field(:name, :string)
+    field(:type, :string)
+    field(:status, :string, default: "active")
+    field(:description, :string)
+    field(:ai_prompt, :string)
+    field(:performance_score, :float)
+    field(:simulations_count, :integer, virtual: true)
 
-    embeds_one :rules, StrategyRules
+    embeds_one(:rules, StrategyRules)
 
-    belongs_to :user, User
-    has_many :simulations, Simulation
+    belongs_to(:user, User)
+    has_many(:simulations, Simulation)
 
     timestamps(type: :utc_datetime)
   end

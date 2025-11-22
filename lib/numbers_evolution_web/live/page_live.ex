@@ -720,7 +720,7 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   @impl true
   def handle_event("use_strategy_template", %{"strategy" => strategy_name}, socket) do
-    prompt = NumbersEvolution.Strategies.OpenRouterService.build_strategy_prompt(strategy_name)
+    prompt = Strategies.OpenRouterService.build_strategy_prompt(strategy_name)
 
     {:noreply,
      socket
@@ -864,7 +864,7 @@ defmodule NumbersEvolutionWeb.PageLive do
     coupons =
       1..count
       |> Enum.map(fn _ ->
-        case NumbersEvolution.Strategies.Generator.generate_numbers(strategy) do
+        case Generator.generate_numbers(strategy) do
           {:ok, numbers} ->
             %{
               main_numbers: numbers.main,
