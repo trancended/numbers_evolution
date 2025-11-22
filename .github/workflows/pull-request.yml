@@ -57,7 +57,7 @@ jobs:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
 
     - name: Compile with warnings as errors
-      run: mix compile --no-deps-check --force --warnings-as-errors
+      run: mix compile --force --warnings-as-errors
 
     - name: Run Credo
       run: mix credo
