@@ -59,7 +59,7 @@ Cypress.Commands.add('login', (email, password) => {
     })
 
     // Sprawdź przekierowanie na dashboard
-    cy.url().should('eq', 'http://localhost:4000/')
+    cy.url().should('eq', 'http://127.0.0.1:4000/')
     cy.get('[data-cy="user-menu"]').should('contain', email)
   })
 })

@@ -3,7 +3,7 @@ import http from 'http'
 
 export default defineConfig({
   e2e: {
-    baseUrl: 'http://localhost:4000',
+    baseUrl: 'http://127.0.0.1:4000',
     specPattern: 'cypress/e2e/**/*.cy.js',
     supportFile: 'cypress/support/e2e.js',
     viewportWidth: 1280,
@@ -15,7 +15,7 @@ export default defineConfig({
       openMode: 1,
     },
     env: {
-      API_BASE_URL: 'http://localhost:4000/api',
+      API_BASE_URL: 'http://127.0.0.1:4000/api',
       TEST_USER_EMAIL: 'test@example.com',
       TEST_USER_PASSWORD: 'testpassword123',
     },
@@ -34,7 +34,7 @@ export default defineConfig({
                 const parsedUrl = new URL(url)
                 
                 const options = {
-                  hostname: parsedUrl.hostname,
+                  hostname: '127.0.0.1', // Force IPv4 to avoid IPv6 resolution issues
                   port: parsedUrl.port || 4000,
                   path: parsedUrl.pathname,
                   method: 'POST',

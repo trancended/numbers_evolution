@@ -108,7 +108,7 @@ jobs:
       run: |
         echo "Waiting for Phoenix server to start..."
         for i in {1..30}; do
-          if curl -f http://localhost:4000 > /dev/null 2>&1; then
+          if curl -f http://127.0.0.1:4000 > /dev/null 2>&1; then
             echo "Phoenix server is responding on attempt $i!"
             break
           fi
@@ -125,7 +125,7 @@ jobs:
 
         # Test the E2E reset endpoint
         echo "Testing /api/e2e/reset-db endpoint..."
-        RESPONSE=$(curl -s -X POST http://localhost:4000/api/e2e/reset-db -H "Content-Type: application/json")
+        RESPONSE=$(curl -s -X POST http://127.0.0.1:4000/api/e2e/reset-db -H "Content-Type: application/json")
         echo "E2E endpoint response: $RESPONSE"
 
         # Check if response contains success status
@@ -139,7 +139,7 @@ jobs:
     - name: Run Cypress tests
       run: npx cypress run --config-file cypress.config.js
       env:
-        CYPRESS_baseUrl: http://localhost:4000
+        CYPRESS_baseUrl: http://127.0.0.1:4000
 
     - name: Stop Phoenix server
       if: always()

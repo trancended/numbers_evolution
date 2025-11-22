@@ -24,7 +24,7 @@ describe('Authentication', () => {
       })
 
       // Verify redirect to dashboard
-      cy.url().should('eq', 'http://localhost:4000/')
+      cy.url().should('eq', 'http://127.0.0.1:4000/')
       cy.get('[data-cy="user-menu"]').should('contain', 'newuser@example.com')
       cy.get('h1').should('contain', 'Dashboard')
     })
@@ -78,7 +78,7 @@ describe('Authentication', () => {
       })
 
       // Verify redirect to dashboard
-      cy.url().should('eq', 'http://localhost:4000/')
+      cy.url().should('eq', 'http://127.0.0.1:4000/')
       cy.get('[data-cy="user-menu"]').should('contain', 'test@example.com')
       cy.get('h1').should('contain', 'Dashboard')
     })
@@ -129,7 +129,7 @@ describe('Authentication', () => {
       cy.get('[data-cy="logout-button"]').click()
 
       // Should redirect to landing page
-      cy.url().should('eq', 'http://localhost:4000/')
+      cy.url().should('eq', 'http://127.0.0.1:4000/')
       cy.get('[data-cy="register-button"]').should('be.visible')
       cy.get('[data-cy="login-button"]').should('be.visible')
       cy.get('[data-cy="user-menu"]').should('not.exist')
