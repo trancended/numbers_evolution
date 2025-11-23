@@ -1,14 +1,10 @@
 /* See the Tailwind configuration guide for advanced usage
    https://tailwindcss.com/docs/configuration */
 
-@import "tailwindcss" source(none);
-@source "../css";
-@source "../js";
-@source "../../lib/numbers_evolution_web";
+@import "tailwindcss";
 
-/* Custom theme variables for light and dark modes */
-:root {
-  color-scheme: light;
+@theme {
+  /* Custom theme colors */
   --color-base-100: oklch(98% 0 0);
   --color-base-200: oklch(96% 0.001 286.375);
   --color-base-300: oklch(92% 0.004 286.32);
@@ -31,6 +27,7 @@
   --color-error-content: oklch(96% 0.015 12.422);
 }
 
+/* Dark mode theme */
 [data-theme="dark"] {
   color-scheme: dark;
   --color-base-100: oklch(30.33% 0.016 252.42);
@@ -56,14 +53,172 @@
 }
 
 /* Add variants based on LiveView classes */
-@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
-@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
-@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+@variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
 
 /* Use the data attribute for dark mode  */
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+@variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
-/* This file is for your main application CSS */
+/* Base styles */
+@layer base {
+  body {
+    @apply bg-base-100 text-base-content;
+  }
+}
+
+/* Component styles - DaisyUI-like components */
+@layer components {
+  /* Button styles */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-3 font-medium rounded-lg transition-all duration-200;
+    @apply bg-base-200 text-base-content;
+    @apply hover:bg-base-300;
+  }
+  
+  .btn-primary {
+    @apply bg-primary text-primary-content;
+    @apply hover:opacity-90;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary text-secondary-content;
+    @apply hover:opacity-90;
+  }
+  
+  .btn-error {
+    @apply bg-error text-error-content;
+    @apply hover:opacity-90;
+  }
+  
+  .btn-ghost {
+    @apply bg-transparent;
+    @apply hover:bg-base-200;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-2 text-sm;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-4 text-lg;
+  }
+  
+  /* Card styles */
+  .card {
+    @apply rounded-lg overflow-hidden;
+  }
+  
+  .card-body {
+    @apply p-6;
+  }
+  
+  .card-title {
+    @apply text-xl font-bold mb-2;
+  }
+  
+  .card-actions {
+    @apply flex gap-2;
+  }
+  
+  /* Navbar styles */
+  .navbar {
+    @apply flex items-center justify-between py-4;
+    @apply bg-base-100 border-b border-base-300;
+  }
+  
+  /* Hero styles */
+  .hero {
+    @apply flex items-center justify-center py-20;
+  }
+  
+  .hero-content {
+    @apply max-w-3xl mx-auto px-4;
+  }
+  
+  /* Form control */
+  .form-control {
+    @apply flex flex-col gap-2;
+  }
+  
+  .label {
+    @apply text-sm font-medium;
+  }
+  
+  /* Menu styles */
+  .menu {
+    @apply flex flex-col gap-1;
+  }
+  
+  .menu li {
+    @apply list-none;
+  }
+  
+  /* Drawer styles */
+  .drawer-side {
+    @apply fixed inset-y-0 left-0 w-80 bg-base-200 shadow-xl z-50;
+  }
+  
+  /* Modal styles */
+  .modal {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+  }
+  
+  .modal-backdrop {
+    @apply fixed inset-0 bg-neutral/50;
+  }
+  
+  .modal-box {
+    @apply relative bg-base-100 rounded-lg shadow-xl p-6 max-w-lg w-full mx-4;
+  }
+  
+  /* Alert styles */
+  .alert {
+    @apply p-4 rounded-lg;
+  }
+  
+  .alert-info {
+    @apply bg-info text-info-content;
+  }
+  
+  .alert-success {
+    @apply bg-success text-success-content;
+  }
+  
+  .alert-warning {
+    @apply bg-warning text-warning-content;
+  }
+  
+  .alert-error {
+    @apply bg-error text-error-content;
+  }
+  
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium rounded;
+    @apply bg-base-200 text-base-content;
+  }
+  
+  .badge-primary {
+    @apply bg-primary text-primary-content;
+  }
+  
+  .badge-secondary {
+    @apply bg-secondary text-secondary-content;
+  }
+  
+  .badge-success {
+    @apply bg-success text-success-content;
+  }
+  
+  .badge-warning {
+    @apply bg-warning text-warning-content;
+  }
+  
+  .badge-error {
+    @apply bg-error text-error-content;
+  }
+}
