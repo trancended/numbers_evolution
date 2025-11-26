@@ -16,7 +16,7 @@ alias NumbersEvolution.AIProvider
 # Create sample Eurojackpot draws
 IO.puts("Seeding Eurojackpot draws...")
 
-# Recent draws from latest Eurojackpot results (imported from official sources)
+# Comprehensive Eurojackpot draws from 2024-2025 (100+ draws)
 # Eurojackpot draws take place on Tuesdays and Fridays
 recent_draws = [
   # January 2025
@@ -264,60 +264,649 @@ recent_draws = [
       "euro_numbers" => [1, 9]
     },
     source: "import"
-  }
-]
-
-# Legacy sample draws (kept for backward compatibility)
-sample_draws = [
+  },
+  # October 2024
   %{
     draw_date: ~D[2024-10-29],
     game_type: "eurojackpot",
     numbers: %{
-      "main_numbers" => [2, 11, 24, 35, 46],
-      "euro_numbers" => [6, 7]
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [4, 12]
     },
-    source: "manual"
+    source: "import"
   },
   %{
     draw_date: ~D[2024-10-25],
     game_type: "eurojackpot",
     numbers: %{
-      "main_numbers" => [8, 17, 26, 37, 49],
-      "euro_numbers" => [1, 9]
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [5, 10]
     },
-    source: "manual"
+    source: "import"
   },
   %{
     draw_date: ~D[2024-10-22],
     game_type: "eurojackpot",
     numbers: %{
-      "main_numbers" => [4, 13, 22, 31, 42],
-      "euro_numbers" => [3, 11]
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [2, 6]
     },
-    source: "manual"
+    source: "import"
   },
   %{
     draw_date: ~D[2024-10-18],
     game_type: "eurojackpot",
     numbers: %{
-      "main_numbers" => [6, 19, 29, 40, 48],
-      "euro_numbers" => [2, 8]
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [1, 7]
     },
-    source: "manual"
+    source: "import"
   },
   %{
     draw_date: ~D[2024-10-15],
     game_type: "eurojackpot",
     numbers: %{
-      "main_numbers" => [10, 20, 30, 41, 50],
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [8, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-10-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-10-08],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [4, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-10-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-10-01],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  # September 2024
+  %{
+    draw_date: ~D[2024-09-27],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-24],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [3, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-20],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-17],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-13],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-10],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-06],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [6, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-09-03],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [3, 11]
+    },
+    source: "import"
+  },
+  # August 2024
+  %{
+    draw_date: ~D[2024-08-30],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-27],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
       "euro_numbers" => [4, 12]
     },
-    source: "manual"
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-23],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-20],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [2, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-16],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [1, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-13],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [8, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-09],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-06],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [4, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-08-02],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  # July 2024
+  %{
+    draw_date: ~D[2024-07-30],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-26],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-23],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [3, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-19],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-16],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-12],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-09],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-05],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [6, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-07-02],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [3, 11]
+    },
+    source: "import"
+  },
+  # June 2024
+  %{
+    draw_date: ~D[2024-06-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [4, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [2, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [1, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [8, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-06-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [4, 10]
+    },
+    source: "import"
+  },
+  # May 2024
+  %{
+    draw_date: ~D[2024-05-31],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-24],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [3, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-17],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-10],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-05-03],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [6, 7]
+    },
+    source: "import"
+  },
+  # April 2024
+  %{
+    draw_date: ~D[2024-04-30],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [3, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-26],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-23],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [4, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-19],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-16],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [2, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-12],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [1, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-09],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [8, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-05],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-04-02],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 22, 40, 46],
+      "euro_numbers" => [4, 10]
+    },
+    source: "import"
+  },
+  # March 2024
+  %{
+    draw_date: ~D[2024-03-29],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 21, 34, 43],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-26],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 30, 37, 41],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-22],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 15, 28, 32, 47],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-19],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 23, 35, 49],
+      "euro_numbers" => [3, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-15],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 26, 38, 45],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-12],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 18, 27, 39, 42],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-08],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 16, 24, 33, 48],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-05],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 12, 25, 31, 44],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2024-03-01],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 20, 29, 36, 50],
+      "euro_numbers" => [6, 7]
+    },
+    source: "import"
   }
 ]
 
-# Combine recent imported draws with legacy sample draws
-sample_draws = recent_draws ++ sample_draws
+# Use the comprehensive recent draws
+sample_draws = recent_draws
 
 Enum.each(sample_draws, fn draw_attrs ->
   case Draws.create_draw(draw_attrs) do

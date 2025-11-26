@@ -13,6 +13,10 @@ defmodule NumbersEvolution.Release do
       IO.puts("Running migrations on existing database...")
       run_migrations_with_retry(repo)
     end
+
+    # Run seeds after migrations
+    IO.puts("Running database seeds...")
+    seed()
   end
 
   def create_db do
@@ -26,10 +30,10 @@ defmodule NumbersEvolution.Release do
 
   defp create_database_if_needed(repo) do
     case Ecto.Migrator.with_repo(repo, fn _repo ->
-      # This will work if connecting to default database
-      :ok
-    end) do
-      {:ok, _} ->
+           # This will work if connecting to default database
+           :ok
+         end) do
+      {:ok, _, _} ->
         IO.puts("Database is accessible")
 
       {:error, _} ->
@@ -42,8 +46,8 @@ defmodule NumbersEvolution.Release do
     IO.puts("Attempting to run migrations... (attempt #{6 - attempts}/5)")
 
     case Ecto.Migrator.with_repo(repo, fn repo ->
-      Ecto.Migrator.run(repo, :up, all: true)
-    end) do
+           Ecto.Migrator.run(repo, :up, all: true)
+         end) do
       {:ok, migrated, _} when is_list(migrated) ->
         IO.puts("Migrations completed successfully! Migrated #{length(migrated)} files.")
 
@@ -53,7 +57,7 @@ defmodule NumbersEvolution.Release do
       {:error, reason} when attempts > 1 ->
         IO.puts("Migration failed: #{inspect(reason)}")
         IO.puts("Retrying in 10 seconds... (#{attempts - 1} attempts left)")
-        :timer.sleep(10000)
+        :timer.sleep(10_000)
         run_migrations_with_retry(repo, attempts - 1)
 
       {:error, reason} ->
