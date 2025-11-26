@@ -8,8 +8,8 @@
 # This file is based on https://hexdocs.pm/phoenix/releases.html#containers
 
 ARG ELIXIR_VERSION=1.19.3
-ARG OTP_VERSION=28.1
-ARG DEBIAN_VERSION=bookworm-20241016-slim
+ARG OTP_VERSION=28.2
+ARG DEBIAN_VERSION=bookworm-20251117-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"

@@ -69,10 +69,7 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base,
-    # Fly.io handles SSL termination, so we don't need to configure HTTPS here
-    # but we should force SSL redirects
-    force_ssl: [hsts: true]
+    secret_key_base: secret_key_base
 
   # ## SSL Support
   #
