@@ -11,6 +11,7 @@ kill_signal = 'SIGTERM'
 [env]
   PHX_HOST = 'numbers-evolution-akkdua.fly.dev'
   PORT = '8080'
+  PHX_SERVER = 'true'
 
 [http_service]
   internal_port = 8080
