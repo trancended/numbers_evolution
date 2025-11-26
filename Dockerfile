@@ -7,8 +7,8 @@
 #
 # This file is based on https://hexdocs.pm/phoenix/releases.html#containers
 
-ARG ELIXIR_VERSION=1.19.3
-ARG OTP_VERSION=28.1
+ARG ELIXIR_VERSION=1.17.3
+ARG OTP_VERSION=27.1.2
 ARG DEBIAN_VERSION=bookworm-20241016-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
@@ -67,10 +67,8 @@ RUN mix release
 # the compiled release and other runtime necessities
 FROM ${RUNNER_IMAGE}
 
-RUN apt-get update -y && apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
-  libnss3 libnss3-dev libatk-bridge2.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2 libgtk-3-0 libx11-xcb1 \
-  libgtk-3-dev libx11-dev libxcb1-dev libxss-dev libasound2-dev libxrandr-dev libxdamage-dev \
-  xvfb x11-utils libxss1 libgconf-2-4 libxtst6 libxrandr2 libasound2 libpangocairo-1.0-0 libatk1.0-0 libcairo-gobject2 libgtk-3-0 libgdk-pixbuf2.0-0 \
+RUN apt-get update -y && \
+  apt-get install -y libstdc++6 openssl libncurses6 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
