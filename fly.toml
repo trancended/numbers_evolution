@@ -1,4 +1,4 @@
-app = 'numbers-evolution-akkdua'
+app = 'numbers-evolution'
 primary_region = 'fra'
 kill_signal = 'SIGTERM'
 
@@ -9,7 +9,7 @@ kill_signal = 'SIGTERM'
   release_command = '/app/bin/migrate'
 
 [env]
-  PHX_HOST = 'numbers-evolution-akkdua.fly.dev'
+  PHX_HOST = 'numbers-evolution.fly.dev'
   PORT = '8080'
   PHX_SERVER = 'true'
   MIX_ENV = 'prod'
