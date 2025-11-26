@@ -67,15 +67,18 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         @kind == :info && "alert-info",
         @kind == :error && "alert-error"
       ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+        <.icon :if={@kind == :info} name="hero-check-circle" class="size-5 shrink-0 mt-0.5" />
+        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0 mt-0.5" />
+        <div class="flex-1 min-w-0">
+          <p :if={@title} class="font-semibold mb-1">{@title}</p>
+          <p class="text-sm leading-relaxed">{msg}</p>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="group self-start cursor-pointer ml-2 p-1 rounded hover:bg-black/10 transition-colors"
+          aria-label={gettext("close")}
+        >
+          <.icon name="hero-x-mark" class="size-4 opacity-60 group-hover:opacity-100" />
         </button>
       </div>
     </div>
@@ -508,38 +511,30 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       id={@id}
       data-cy={@data_cy}
       class={["modal", @show && "modal-open"]}
+      phx-hook="ModalDialog"
       phx-remove={hide_modal(@id)}
     >
-      <div class="modal-box max-w-2xl">
-        <h3 :if={@title != []} class="font-bold text-lg mb-4">
-          {render_slot(@title)}
-        </h3>
-        <div class="py-4">
-          {render_slot(@inner_block)}
-        </div>
-        <div :if={@actions != []} class="modal-action">
-          {render_slot(@actions)}
-        </div>
-        <form method="dialog" class="absolute right-4 top-4">
+      <div class="modal-box">
+        <form method="dialog" class="absolute right-4 top-4 z-10">
           <button
             type="button"
             phx-click={@on_cancel || hide_modal(@id)}
-            class="btn btn-sm btn-circle btn-ghost"
+            class="btn btn-sm btn-circle btn-ghost hover:bg-base-200"
             aria-label={gettext("close")}
           >
             <.icon name="hero-x-mark" class="size-5" />
           </button>
         </form>
+        <h3 :if={@title != []} class="font-bold text-xl mb-6 pr-8 text-base-content">
+          {render_slot(@title)}
+        </h3>
+        <div class="space-y-4">
+          {render_slot(@inner_block)}
+        </div>
+        <div :if={@actions != []} class="modal-action">
+          {render_slot(@actions)}
+        </div>
       </div>
-      <form method="dialog" class="modal-backdrop">
-        <button
-          type="button"
-          phx-click={@on_cancel || hide_modal(@id)}
-          aria-label={gettext("close")}
-        >
-          close
-        </button>
-      </form>
     </dialog>
     """
   end

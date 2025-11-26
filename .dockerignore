@@ -1,0 +1,64 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+_build
+deps
+
+# Node modules and assets
+node_modules
+assets/node_modules
+
+# Testing
+test
+cypress
+*.test.exs
+*.test.js
+
+# Documentation
+README.md
+README.pl.md
+AGENTS.md
+example_prompt.txt
+
+# Development files
+.dev
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Remove directory
+REMOVE/
+
+# Scripts (not needed in container)
+scripts/

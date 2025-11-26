@@ -104,6 +104,32 @@ const HalfRandomMode = {
   }
 }
 
+// Modal dialog hook - opens/closes dialog element based on show attribute
+const ModalDialog = {
+  mounted() {
+    this.handleShow()
+  },
+
+  updated() {
+    this.handleShow()
+  },
+
+  destroyed() {
+    if (this.el.open) {
+      this.el.close()
+    }
+  },
+
+  handleShow() {
+    const show = this.el.classList.contains('modal-open')
+    if (show && !this.el.open) {
+      this.el.showModal()
+    } else if (!show && this.el.open) {
+      this.el.close()
+    }
+  }
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
@@ -112,7 +138,8 @@ const liveSocket = new LiveSocket("/live", Socket, {
     AutoHideFlash: AutoHideFlash,
     SetTextareaValue: SetTextareaValue,
     ConfirmDelete: ConfirmDelete,
-    HalfRandomMode: HalfRandomMode
+    HalfRandomMode: HalfRandomMode,
+    ModalDialog: ModalDialog
   },
 })
 

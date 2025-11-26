@@ -14,13 +14,13 @@ env:
 jobs:
   test:
     name: Test & Format Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       postgres:
         image: postgres:16
         ports:
-          - 5432:5432
+          - 5436:5432
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -32,6 +32,24 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5436 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -68,14 +86,14 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: test
 
     services:
       postgres:
         image: postgres:16
         ports:
-          - 5432:5432
+          - 5437:5432
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -87,6 +105,24 @@ jobs:
           --health-retries 5
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5437 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -121,6 +157,11 @@ jobs:
     - name: Install Node.js dependencies
       run: npm ci
 
+    - name: Install system dependencies for Cypress
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+
     - name: Compile assets
       run: mix assets.deploy
       env:
@@ -131,34 +172,74 @@ jobs:
         MIX_ENV=test_e2e mix ecto.create
         MIX_ENV=test_e2e mix ecto.migrate
       env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5437/numbers_evolution_e2e
 
     - name: Start Phoenix server
       run: |
+        echo "Starting Phoenix server..."
         MIX_ENV=test_e2e mix phx.server > phoenix.log 2>&1 &
-        echo $! > phoenix.pid
-        # Wait for server to be ready
-        for i in {1..30}; do
-          if curl -s http://127.0.0.1:4000 > /dev/null 2>&1; then
-            echo "Server is ready!"
-            break
-          fi
-          echo "Waiting for server... ($i/30)"
-          sleep 2
-        done
-        if ! curl -s http://127.0.0.1:4000 > /dev/null 2>&1; then
-          echo "Server failed to start. Log output:"
+        SERVER_PID=$!
+        echo $SERVER_PID > phoenix.pid
+        echo "Server started with PID: $SERVER_PID"
+
+        # Give server a moment to start
+        sleep 3
+
+        # Check if process is still running
+        if kill -0 $SERVER_PID 2>/dev/null; then
+          echo "Phoenix server process is running"
+        else
+          echo "Phoenix server process failed to start"
+          echo "Log output:"
           cat phoenix.log
           exit 1
         fi
+
+        # Wait for server to be ready
+        echo "Waiting for Phoenix server to start..."
+        for i in {1..30}; do
+          if curl -s http://127.0.0.1:4000 > /dev/null 2>&1; then
+            echo "Phoenix server is responding on attempt $i!"
+            break
+          fi
+          echo "Attempt $i: Server not ready yet, waiting..."
+          sleep 2
+          if [ $i -eq 30 ]; then
+            echo "Server failed to start after 60 seconds"
+            echo "Process status:"
+            ps aux | grep phoenix || true
+            echo "Recent log output:"
+            tail -50 phoenix.log
+            echo "Full log output:"
+            cat phoenix.log
+            exit 1
+          fi
+        done
+
+        echo "Testing E2E endpoint availability..."
+        sleep 2
+
+        # Test the E2E reset endpoint
+        echo "Testing /api/e2e/reset-db endpoint..."
+        RESPONSE=$(curl -s -X POST http://127.0.0.1:4000/api/e2e/reset-db -H "Content-Type: application/json")
+        echo "E2E endpoint response: $RESPONSE"
+
+        # Check if response contains success status
+        if echo "$RESPONSE" | grep -q '"status":"ok"'; then
+          echo "E2E endpoint is working correctly!"
+        else
+          echo "E2E endpoint test failed!"
+          exit 1
+        fi
       env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5437/numbers_evolution_e2e
         SECRET_KEY_BASE: U0ZJ6WUkQ2V39V6Z6p9uiYu9Ylm0TAezBEhxUhigJRQKyCSp7KJ7dFB4MDQ251vG
         PHX_HOST: localhost
         PORT: 4000
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-v1-dummy-key-for-ci-testing-only' }}
 
     - name: Run Cypress E2E tests
-      run: npx cypress run
+      run: xvfb-run --auto-servernum npx cypress run
       env:
         CYPRESS_BASE_URL: http://localhost:4000
 
@@ -166,30 +247,20 @@ jobs:
       if: always()
       run: |
         if [ -f phoenix.pid ]; then
-          kill $(cat phoenix.pid) || true
+          SERVER_PID=$(cat phoenix.pid)
+          echo "Stopping Phoenix server (PID: $SERVER_PID)..."
+          kill $SERVER_PID || true
           rm phoenix.pid
         fi
 
-    - name: Upload Cypress screenshots
-      if: failure()
+    - name: Upload test artifacts
       uses: actions/upload-artifact@v4
+      if: always()
+      continue-on-error: true
       with:
-        name: cypress-screenshots
-        path: cypress/screenshots
-        if-no-files-found: ignore
-
-    - name: Upload Cypress videos
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: cypress-videos
-        path: cypress/videos
-        if-no-files-found: ignore
-
-    - name: Upload Phoenix logs
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: phoenix-logs
-        path: phoenix.log
-        if-no-files-found: ignore
+        name: e2e-artifacts
+        path: |
+          cypress/videos/
+          cypress/screenshots/
+          phoenix.log
+        retention-days: 7

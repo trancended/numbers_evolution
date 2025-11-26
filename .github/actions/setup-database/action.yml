@@ -1,0 +1,28 @@
+name: 'Setup Database'
+description: 'Creates and migrates the test database'
+
+inputs:
+  mix-env:
+    description: 'MIX_ENV to use for database operations'
+    required: true
+    default: 'test'
+  database-url:
+    description: 'Database URL to use'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create test database
+      run: mix ecto.create
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}
+        DATABASE_URL: ${{ inputs.database-url }}
+
+    - name: Run database migrations
+      run: mix ecto.migrate
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}
+        DATABASE_URL: ${{ inputs.database-url }}

@@ -50,7 +50,11 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  # Use FLY_APP_NAME for host when available (Fly.io provides this)
+  host =
+    (System.get_env("FLY_APP_NAME") && "#{System.get_env("FLY_APP_NAME")}.fly.dev") ||
+      System.get_env("PHX_HOST") || "example.com"
+
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   config :numbers_evolution, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
@@ -65,7 +69,10 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    # Fly.io handles SSL termination, so we don't need to configure HTTPS here
+    # but we should force SSL redirects
+    force_ssl: [hsts: true]
 
   # ## SSL Support
   #

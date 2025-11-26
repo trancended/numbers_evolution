@@ -1,0 +1,49 @@
+name: 'Setup Elixir Environment'
+description: 'Sets up Elixir, caches dependencies, and installs packages'
+
+inputs:
+  elixir-version:
+    description: 'Elixir version to use'
+    required: true
+    default: '1.19.3'
+  otp-version:
+    description: 'OTP version to use'
+    required: true
+    default: '28.1'
+  mix-env:
+    description: 'MIX_ENV to set'
+    required: false
+    default: 'test'
+  cache-deps:
+    description: 'Whether to cache deps and _build directories'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: ${{ inputs.elixir-version }}
+        otp-version: ${{ inputs.otp-version }}
+
+    - name: Cache dependencies
+      if: inputs.cache-deps == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        mix deps.get
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}

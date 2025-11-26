@@ -5,6 +5,7 @@ config :numbers_evolution, NumbersEvolution.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
+  port: 5434,
   database: "numbers_evolution_e2e",
   pool_size: 10
 

@@ -1114,11 +1114,163 @@ defmodule NumbersEvolutionWeb.PageLive do
           </.modal>
         <% end %>
       <% else %>
-        <.landing_section
-          show_register_form={@show_register_form}
-          show_login_form={@show_login_form}
-          form={if @show_register_form, do: @register_form, else: @login_form}
-        />
+        <div class="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10">
+          <%!-- Hero Section --%>
+          <header class="hero min-h-[60vh]">
+            <div class="hero-content text-center">
+              <div class="max-w-2xl">
+                <h1 class="text-5xl font-bold mb-4">Numbers Evolution</h1>
+                <p class="text-2xl mb-8">Testuj strategie typowania Eurojackpot z pomocą AI</p>
+                <div class="flex gap-4 justify-center">
+                  <button
+                    data-cy="register-button"
+                    type="button"
+                    phx-click="show_register_form"
+                    class="btn btn-primary btn-lg"
+                  >
+                    Zarejestruj się
+                  </button>
+                  <button
+                    data-cy="login-button"
+                    type="button"
+                    phx-click="show_login_form"
+                    class="btn btn-secondary btn-lg"
+                  >
+                    Zaloguj
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <%!-- Registration Modal --%>
+          <.modal
+            :if={@show_register_form}
+            data_cy="register-modal"
+            id="register-modal"
+            show={true}
+            on_cancel={JS.push("close_auth_form")}
+          >
+            <:title>Rejestracja</:title>
+            <.form
+              data-cy="register-form"
+              for={@register_form}
+              id="register-form"
+              phx-submit="register"
+              phx-change="validate_register"
+            >
+              <.input
+                field={@register_form[:email]}
+                type="email"
+                label="Email"
+                required
+              />
+              <.input
+                field={@register_form[:password]}
+                type="password"
+                label="Hasło"
+                required
+              />
+              <.input
+                field={@register_form[:password_confirmation]}
+                type="password"
+                label="Potwierdź hasło"
+                required
+              />
+            </.form>
+            <:actions>
+              <button
+                data-cy="register-cancel"
+                type="button"
+                phx-click="close_auth_form"
+                class="btn"
+              >
+                Anuluj
+              </button>
+              <button
+                data-cy="register-submit"
+                type="submit"
+                form="register-form"
+                class="btn btn-primary"
+              >
+                Zarejestruj się
+              </button>
+            </:actions>
+          </.modal>
+
+          <%!-- Login Modal --%>
+          <.modal
+            :if={@show_login_form}
+            data_cy="login-modal"
+            id="login-modal"
+            show={true}
+            on_cancel={JS.push("close_auth_form")}
+          >
+            <:title>Logowanie</:title>
+            <.form
+              data-cy="login-form"
+              for={@login_form}
+              id="login-form"
+              phx-submit="login"
+              phx-change="validate_login"
+            >
+              <.input
+                field={@login_form[:email]}
+                type="email"
+                label="Email"
+                required
+              />
+              <.input
+                field={@login_form[:password]}
+                type="password"
+                label="Hasło"
+                required
+              />
+            </.form>
+            <:actions>
+              <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
+                Anuluj
+              </button>
+              <button data-cy="login-submit" type="submit" form="login-form" class="btn btn-primary">
+                Zaloguj
+              </button>
+            </:actions>
+          </.modal>
+
+          <%!-- Features Section --%>
+          <section class="container mx-auto px-4 py-16">
+            <h2 class="text-3xl font-bold text-center mb-12">Główne funkcjonalności</h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <.feature_card
+                icon="hero-light-bulb"
+                title="Tworzenie strategii"
+                description="Manualnie lub przez AI"
+              />
+              <.feature_card
+                icon="hero-chart-bar"
+                title="Symulacje"
+                description="Na danych historycznych"
+              />
+              <.feature_card icon="hero-trophy" title="Ranking" description="Skuteczność strategii" />
+              <.feature_card
+                icon="hero-sparkles"
+                title="Generator"
+                description="Propozycje na losowanie"
+              />
+            </div>
+          </section>
+
+          <%!-- Footer with Disclaimer --%>
+          <footer class="footer footer-center p-10 bg-base-200 text-base-content">
+            <div class="max-w-3xl">
+              <p class="text-sm">
+                <strong>Disclaimer:</strong>
+                Aplikacja służy wyłącznie celom edukacyjnym i symulacyjnym.
+                Nie gwarantuje wygranej i nie jest oficjalnie powiązana z operatorami loterii.
+              </p>
+            </div>
+          </footer>
+        </div>
       <% end %>
     </div>
     """
@@ -1170,5 +1322,25 @@ defmodule NumbersEvolutionWeb.PageLive do
       true ->
         :ok
     end
+  end
+
+  # ============================================================================
+  # Private Helpers - Feature Card Component
+  # ============================================================================
+
+  attr(:icon, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:description, :string, required: true)
+
+  defp feature_card(assigns) do
+    ~H"""
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body items-center text-center">
+        <.icon name={@icon} class="size-12 text-primary mb-4" />
+        <h3 class="card-title">{@title}</h3>
+        <p>{@description}</p>
+      </div>
+    </div>
+    """
   end
 end
