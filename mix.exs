@@ -11,7 +11,8 @@ defmodule NumbersEvolution.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      releases: releases()
     ]
   end
 
@@ -99,6 +100,16 @@ defmodule NumbersEvolution.MixProject do
         "format",
         "credo --strict",
         "test"
+      ]
+    ]
+  end
+
+  defp releases do
+    [
+      numbers_evolution: [
+        include_executables_for: [:unix],
+        steps: [:assemble, :tar],
+        overlays: ["rel/overlays"]
       ]
     ]
   end

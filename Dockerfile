@@ -57,6 +57,9 @@ RUN mix compile
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
+# Copy overlays for release
+COPY rel rel
+
 # Create release
 RUN mix release
 
@@ -88,9 +91,6 @@ COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/numbers_evolu
 
 USER nobody
 
-# If using an environment that doesn't automatically reap zombie processes, it is
-# advised to add an init process such as tini via `apt-get install`
-# above and adding an entrypoint. See https://github.com/krallin/tini for details
-# ENTRYPOINT ["/app/bin/server"]
+EXPOSE 8080
 
-CMD ["/app/bin/numbers_evolution", "start"]
+CMD ["/app/bin/server"]

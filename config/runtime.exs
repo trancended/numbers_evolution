@@ -55,7 +55,7 @@ if config_env() == :prod do
     (System.get_env("FLY_APP_NAME") && "#{System.get_env("FLY_APP_NAME")}.fly.dev") ||
       System.get_env("PHX_HOST") || "example.com"
 
-  port = String.to_integer(System.get_env("PORT") || "4000")
+  port = String.to_integer(System.get_env("PORT") || "8080")
 
   config :numbers_evolution, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
