@@ -1,0 +1,120 @@
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  quality-gate:
+    name: Pre-deployment Quality Gate
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: numbers_evolution_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Elixir Environment
+      uses: ./.github/actions/setup-elixir
+      with:
+        elixir-version: '1.19.3'
+        otp-version: '28.1'
+        mix-env: 'test'
+
+    - name: Setup Database
+      uses: ./.github/actions/setup-database
+      with:
+        mix-env: 'test'
+        database-url: postgresql://postgres:postgres@localhost:5432/numbers_evolution_test
+
+    - name: Run Quality Checks
+      uses: ./.github/actions/quality-checks
+      with:
+        mix-env: 'test'
+        database-url: postgresql://postgres:postgres@localhost:5432/numbers_evolution_test
+        run-credo: 'true'
+        run-tests: 'true'
+        run-precommit: 'false'
+
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-22.04
+    needs: quality-gate
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Fly CLI
+      uses: superfly/flyctl-actions/setup-flyctl@master
+
+    - name: Deploy to Fly.io
+      run: |
+        echo "🚀 Deploying to Fly.io..."
+        flyctl deploy --remote-only --ha=false
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    - name: Run migrations
+      run: |
+        echo "🗄️ Running database migrations..."
+        flyctl ssh console --command "/app/bin/numbers_evolution eval 'NumbersEvolution.Release.migrate()'"
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  verify-deployment:
+    name: Verify Deployment
+    runs-on: ubuntu-22.04
+    needs: deploy
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check application health
+      run: |
+        echo "🔍 Verifying deployment..."
+        sleep 10
+        
+        APP_URL="https://numbers-evolution.fly.dev"
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL")
+        
+        if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 302 ]; then
+          echo "✅ Application is responding with status code: $HTTP_CODE"
+          echo "🌐 Application is live at: $APP_URL"
+        else
+          echo "❌ Application health check failed with status code: $HTTP_CODE"
+          exit 1
+        fi
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "✅ Deployment successful!"
+          echo "🌐 Application URL: https://numbers-evolution.fly.dev"
+        else
+          echo "❌ Deployment verification failed!"
+        fi
+

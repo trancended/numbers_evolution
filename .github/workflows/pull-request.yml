@@ -12,7 +12,7 @@ permissions:
 jobs:
   lint:
     name: Lint & Compile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       postgres:
@@ -25,9 +25,28 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5435:5432
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5435 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -58,13 +77,13 @@ jobs:
       run: mix ecto.create
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Run database migrations
       run: mix ecto.migrate
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Run Credo
       run: mix credo
@@ -73,11 +92,11 @@ jobs:
       run: mix test
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
   unit-test:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       postgres:
@@ -90,9 +109,28 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5435:5432
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5435 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -118,23 +156,23 @@ jobs:
       run: mix ecto.create
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Run database migrations
       run: mix ecto.migrate
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Run unit tests
       run: mix test
       env:
         MIX_ENV: test
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
   e2e-test:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       postgres:
@@ -147,9 +185,28 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5435:5432
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5435 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -182,17 +239,22 @@ jobs:
     - name: Install Node.js dependencies
       run: npm ci
 
+    - name: Install system dependencies for Cypress
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+
     - name: Create database
       run: mix ecto.create
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_e2e
 
     - name: Run database migrations
       run: mix ecto.migrate
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_e2e
 
     - name: Compile application
       run: mix compile
@@ -211,7 +273,7 @@ jobs:
         echo $! > phoenix.pid
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_e2e
         SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use_must_be_at_least_64_chars_long
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'sk-or-v1-dummy-key-for-ci-testing-only' }}
         PHX_HOST: localhost
@@ -229,7 +291,7 @@ jobs:
         echo "E2E endpoint check complete!"
 
     - name: Run Cypress tests
-      run: npx cypress run --config-file cypress.config.js
+      run: xvfb-run --auto-servernum npx cypress run --config-file cypress.config.js
       env:
         CYPRESS_baseUrl: http://localhost:4000
 
@@ -253,7 +315,7 @@ jobs:
 
   status-comment:
     name: Status Comment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [lint, unit-test, e2e-test]
     if: always()
 

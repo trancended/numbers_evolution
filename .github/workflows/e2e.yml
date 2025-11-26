@@ -8,7 +8,7 @@ on:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       postgres:
@@ -21,9 +21,28 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5434:5432
 
     steps:
+    - name: Clean up previous containers and ports
+      run: |
+        # Targeted cleanup - only clean up containers from previous runs
+        echo "Cleaning up containers from previous workflow runs..."
+        # Stop containers that might be using our port (excluding current job containers)
+        if docker ps -q --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -q --filter "label=com.github.actions.job" | head -n -1 | xargs docker stop || true
+        fi
+        if docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | grep -q .; then
+          docker ps -aq --filter "label=com.github.actions.job" | head -n -1 | xargs docker rm || true
+        fi
+        # Clean up orphaned containers
+        docker container prune -f || true
+        # Kill any processes using our specific port (alternative to lsof)
+        netstat -tlnp 2>/dev/null | grep ":5434 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 || true 2>/dev/null || true
+        # Brief wait
+        sleep 1
+        echo "Cleanup completed."
+
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -32,6 +51,63 @@ jobs:
       with:
         elixir-version: '1.15'
         otp-version: '26'
+
+    - name: Verify environment
+      run: |
+        echo "=== Environment Information ==="
+        echo "OS: $(uname -a)"
+        echo "Distribution: $(cat /etc/os-release | grep PRETTY_NAME || echo 'Unknown')"
+        echo "Running in container: $([ -f /.dockerenv ] && echo 'yes' || echo 'no')"
+        echo "ACT environment: ${ACT:-not set}"
+        echo "CI environment: ${CI:-not set}"
+        echo "User: $(whoami)"
+        echo "================================"
+
+    - name: Install system dependencies for Cypress
+      run: |
+        # Detect if we're running in a container (act) or native GitHub Actions
+        if [ -f /.dockerenv ] || [ -n "$ACT" ]; then
+          echo "Running in container environment (act/Docker)"
+          APT_CMD="apt-get"
+        else
+          echo "Running in GitHub Actions environment"
+          APT_CMD="sudo apt-get"
+        fi
+        
+        echo "Installing Cypress system dependencies..."
+        $APT_CMD update || { echo "apt-get update failed"; exit 1; }
+        $APT_CMD install -y \
+          xvfb \
+          libnss3 \
+          libatk-bridge2.0-0 \
+          libdrm2 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxrandr2 \
+          libgbm1 \
+          libxss1 \
+          libasound2 \
+          libgtk-3-0 \
+          libx11-xcb1 \
+          libgconf-2-4 \
+          libxtst6 \
+          libpangocairo-1.0-0 \
+          libatk1.0-0 \
+          libcairo-gobject2 \
+          libgdk-pixbuf2.0-0 || { echo "Package installation failed"; exit 1; }
+        
+        # Verify critical libraries are installed
+        echo "Verifying libnss3 installation..."
+        if ldconfig -p | grep -q libnss3.so; then
+          echo "✓ libnss3.so found"
+        else
+          echo "✗ libnss3.so NOT found - this will cause Cypress to fail"
+          ldconfig -p | grep nss || echo "No NSS libraries found"
+          exit 1
+        fi
+        
+        ldconfig 2>/dev/null || true
+        echo "System dependencies installed successfully"
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -45,28 +121,75 @@ jobs:
         path: |
           deps
           _build
-          node_modules
-        key: ${{ runner.os }}-deps-${{ hashFiles('**/mix.lock', '**/package-lock.json') }}
+        key: ${{ runner.os }}-mix-deps-${{ hashFiles('**/mix.lock') }}
         restore-keys: |
-          ${{ runner.os }}-deps-
+          ${{ runner.os }}-mix-deps-
 
     - name: Install Elixir dependencies
       run: mix deps.get
 
+    - name: Clear Cypress cache
+      run: |
+        echo "Clearing any existing Cypress cache..."
+        # Remove any cached Cypress binaries to ensure fresh install
+        rm -rf ~/.cache/Cypress || true
+        rm -rf /root/.cache/Cypress || true
+        echo "Cypress cache cleared"
+
     - name: Install Node.js dependencies
-      run: npm ci
+      run: |
+        echo "Installing Node.js dependencies..."
+        # Skip Cypress installation during npm ci
+        CYPRESS_INSTALL_BINARY=0 npm ci
+        
+        echo "Node.js dependencies installed (Cypress skipped)"
+
+    - name: Install and verify Cypress
+      run: |
+        echo "Installing Cypress with system libraries available..."
+        
+        # Now install Cypress with all system dependencies in place
+        npx cypress install
+        
+        echo "Verifying Cypress installation..."
+        if npx cypress verify; then
+          echo "✓ Cypress verified successfully"
+        else
+          echo "✗ Cypress verification failed"
+          
+          # Diagnostic information
+          CYPRESS_PATH=$(npx cypress cache path)
+          echo "Cypress cache path: $CYPRESS_PATH"
+          
+          if [ -d "$CYPRESS_PATH" ]; then
+            CYPRESS_BINARY=$(find "$CYPRESS_PATH" -name "Cypress" -type f 2>/dev/null | head -1)
+            if [ -n "$CYPRESS_BINARY" ]; then
+              echo "Found Cypress binary: $CYPRESS_BINARY"
+              echo "Checking binary dependencies:"
+              ldd "$CYPRESS_BINARY" 2>&1 | grep "not found" || echo "All dependencies satisfied"
+            else
+              echo "Cypress binary not found in cache"
+            fi
+          else
+            echo "Cypress cache directory not found"
+          fi
+          
+          exit 1
+        fi
+        
+        echo "Cypress installation and verification complete"
 
     - name: Create database
       run: mix ecto.create
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Run database migrations
       run: mix ecto.migrate
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Compile application
       run: mix compile
@@ -99,9 +222,9 @@ jobs:
         fi
       env:
         MIX_ENV: test_e2e
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/numbers_evolution_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
         SECRET_KEY_BASE: test_secret_key_base_for_ci_only_not_for_prod_use_must_be_at_least_64_chars_long
-        PHX_HOST: localhost
+        PHX_HOST: 0.0.0.0
         PORT: 4000
 
     - name: Wait for server to be ready
@@ -137,9 +260,43 @@ jobs:
         fi
 
     - name: Run Cypress tests
-      run: npx cypress run --config-file cypress.config.js
+      run: |
+        # Test server connectivity
+        echo "Testing server connectivity..."
+        for i in {1..10}; do
+          if curl -f http://127.0.0.1:4000 > /dev/null 2>&1; then
+            echo "Server is ready!"
+            break
+          fi
+          echo "Attempt $i: Server not ready, waiting..."
+          sleep 2
+          if [ $i -eq 10 ]; then
+            echo "ERROR: Server failed to respond after 10 attempts"
+            exit 1
+          fi
+        done
+
+        # Show Cypress info for debugging
+        echo "Cypress information:"
+        npx cypress info || echo "Warning: Could not get Cypress info"
+
+        # For act/local environments, use electron browser
+        if [ -n "$ACT" ] || [ "$CI" != "true" ]; then
+          echo "Running in local environment (ACT)"
+          echo "Using electron browser which works better in containers"
+          
+          # Run all tests with electron
+          npx cypress run --browser electron --headless
+        else
+          # Full Cypress test suite for GitHub CI with Chrome
+          echo "Running in GitHub Actions CI"
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" npx cypress run --config-file cypress.config.js --browser chrome --headless
+        fi
       env:
         CYPRESS_baseUrl: http://127.0.0.1:4000
+        DISPLAY: :99
+        ELECTRON_DISABLE_SECURITY_WARNINGS: true
+        NO_COLOR: 1
 
     - name: Stop Phoenix server
       if: always()
@@ -151,7 +308,7 @@ jobs:
 
     - name: Upload test artifacts
       uses: actions/upload-artifact@v4
-      if: failure()
+      if: failure() && env.GITHUB_ACTIONS == 'true'
       with:
         name: cypress-artifacts
         path: |

@@ -139,6 +139,54 @@ mix ecto.migrate
 mix phx.server
 ```
 
+## 🚀 Wdrożenie (Deployment)
+
+### Szybki Start - Fly.io
+
+Aplikacja jest w pełni skonfigurowana do wdrożenia na [Fly.io](https://fly.io/), nowoczesnej platformie cloudowej zoptymalizowanej dla aplikacji Elixir/Phoenix.
+
+**Setup w 5 minut:** Zobacz [FLY_SETUP.md](./FLY_SETUP.md) dla szybkiego przewodnika.
+
+**Kompletny przewodnik:** Zobacz [DEPLOYMENT.md](./DEPLOYMENT.md) dla szczegółowych instrukcji wdrożenia.
+
+### Automatyczne CI/CD
+
+Projekt zawiera kompletny pipeline CI/CD z GitHub Actions:
+
+- ✅ Automatyczne wdrożenie przy push do `master`
+- ✅ Sprawdzanie jakości przed wdrożeniem (testy, linting)
+- ✅ Automatyczne migracje bazy danych
+- ✅ Weryfikacja health check
+- ✅ Testy E2E przed wdrożeniem
+
+**Konfiguracja:**
+1. Pobierz token Fly.io: `fly auth token`
+2. Dodaj `FLY_API_TOKEN` do GitHub Secrets
+3. Push do brancha `master` → Automatyczne wdrożenie! 🚀
+
+### Ręczne Wdrożenie
+
+```bash
+# Wdrożenie jedną komendą
+./fly-deploy.sh
+```
+
+Twoja aplikacja będzie dostępna pod adresem: **https://numbers-evolution.fly.dev**
+
+### Kluczowe Funkcje
+
+- 🔐 Bezpieczne zarządzanie sekretami
+- 🗄️ Zarządzana baza danych PostgreSQL
+- 📊 Automatyczne sprawdzenia health check
+- 🔄 Wdrożenia bez przestojów
+- 📝 Automatyczne migracje
+- 💰 Dostępny darmowy tier
+
+Więcej informacji:
+- Szybka konfiguracja: [FLY_SETUP.md](./FLY_SETUP.md)
+- Pełny przewodnik: [DEPLOYMENT.md](./DEPLOYMENT.md)  
+- Dokumentacja CI/CD: [.github/workflows/README.md](./.github/workflows/README.md)
+
 ## 📜 Dostępne Skrypty
 
 ### Rozwój

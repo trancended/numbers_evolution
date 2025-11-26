@@ -8,6 +8,8 @@ defmodule NumbersEvolutionWeb.PageComponents do
 
   import NumbersEvolutionWeb.CoreComponents
 
+  alias Phoenix.LiveView.JS
+
   # ============================================================================
   # Navigation Component
   # ============================================================================
@@ -34,7 +36,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="dashboard"
               class={["btn btn-ghost", @active_section == :dashboard && "btn-active"]}
             >
-              <.icon name="hero-home" class="size-5" /> Dashboard
+              <.icon name="hero-home" class="size-5 mr-2" /> Dashboard
             </button>
           </li>
           <li>
@@ -44,7 +46,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="strategies"
               class={["btn btn-ghost", @active_section == :strategies && "btn-active"]}
             >
-              <.icon name="hero-light-bulb" class="size-5" /> Strategie
+              <.icon name="hero-light-bulb" class="size-5 mr-2" /> Strategie
             </button>
           </li>
           <li>
@@ -54,7 +56,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="simulations"
               class={["btn btn-ghost", @active_section == :simulations && "btn-active"]}
             >
-              <.icon name="hero-chart-bar" class="size-5" /> Symulacje
+              <.icon name="hero-chart-bar" class="size-5 mr-2" /> Symulacje
             </button>
           </li>
           <li>
@@ -64,7 +66,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="ranking"
               class={["btn btn-ghost", @active_section == :ranking && "btn-active"]}
             >
-              <.icon name="hero-trophy" class="size-5" /> Ranking
+              <.icon name="hero-trophy" class="size-5 mr-2" /> Ranking
             </button>
           </li>
           <li>
@@ -74,22 +76,31 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="generator"
               class={["btn btn-ghost", @active_section == :generator && "btn-active"]}
             >
-              <.icon name="hero-sparkles" class="size-5" /> Generator
+              <.icon name="hero-sparkles" class="size-5 mr-2" /> Generator
             </button>
           </li>
           <li>
             <div class="dropdown dropdown-end">
-              <label data-cy="user-menu" tabindex="0" class="btn btn-ghost">
+              <label data-cy="user-menu" tabindex="0" class="btn btn-ghost gap-2">
                 <.icon name="hero-user-circle" class="size-5" />
-                {@current_user.email}
+                <span class="hidden sm:inline">{@current_user.email}</span>
               </label>
               <ul
                 tabindex="0"
-                class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52 mt-2"
+                class="dropdown-content menu p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-52 mt-2 z-50"
               >
                 <li>
-                  <button data-cy="logout-button" phx-click="logout" class="w-full text-left">
-                    Wyloguj
+                  <div class="px-3 py-2 text-sm text-base-content/70 border-b border-base-300">
+                    {@current_user.email}
+                  </div>
+                </li>
+                <li>
+                  <button
+                    data-cy="logout-button"
+                    phx-click="logout"
+                    class="w-full text-left px-3 py-2 hover:bg-base-200 rounded transition-colors text-base-content"
+                  >
+                    <.icon name="hero-arrow-right-on-rectangle" class="size-4 inline mr-2" /> Wyloguj
                   </button>
                 </li>
               </ul>
@@ -124,7 +135,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="dashboard"
               class={["btn btn-ghost justify-start", @active_section == :dashboard && "btn-active"]}
             >
-              <.icon name="hero-home" class="size-5" /> Dashboard
+              <.icon name="hero-home" class="size-5 mr-2" /> Dashboard
             </button>
           </li>
           <li>
@@ -133,7 +144,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="strategies"
               class={["btn btn-ghost justify-start", @active_section == :strategies && "btn-active"]}
             >
-              <.icon name="hero-light-bulb" class="size-5" /> Strategie
+              <.icon name="hero-light-bulb" class="size-5 mr-2" /> Strategie
             </button>
           </li>
           <li>
@@ -142,7 +153,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="simulations"
               class={["btn btn-ghost justify-start", @active_section == :simulations && "btn-active"]}
             >
-              <.icon name="hero-chart-bar" class="size-5" /> Symulacje
+              <.icon name="hero-chart-bar" class="size-5 mr-2" /> Symulacje
             </button>
           </li>
           <li>
@@ -151,7 +162,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="ranking"
               class={["btn btn-ghost justify-start", @active_section == :ranking && "btn-active"]}
             >
-              <.icon name="hero-trophy" class="size-5" /> Ranking
+              <.icon name="hero-trophy" class="size-5 mr-2" /> Ranking
             </button>
           </li>
           <li>
@@ -160,7 +171,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               phx-value-section="generator"
               class={["btn btn-ghost justify-start", @active_section == :generator && "btn-active"]}
             >
-              <.icon name="hero-sparkles" class="size-5" /> Generator
+              <.icon name="hero-sparkles" class="size-5 mr-2" /> Generator
             </button>
           </li>
           <li class="mt-auto">
@@ -198,6 +209,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
             <div class="flex gap-4 justify-center">
               <button
                 data-cy="register-button"
+                type="button"
                 phx-click="show_register_form"
                 class="btn btn-primary btn-lg"
               >
@@ -205,6 +217,7 @@ defmodule NumbersEvolutionWeb.PageComponents do
               </button>
               <button
                 data-cy="login-button"
+                type="button"
                 phx-click="show_login_form"
                 class="btn btn-secondary btn-lg"
               >
@@ -216,95 +229,93 @@ defmodule NumbersEvolutionWeb.PageComponents do
       </header>
 
       <%!-- Registration Modal --%>
-      <%= if @show_register_form do %>
-        <div data-cy="register-modal" class="modal modal-open">
-          <div class="modal-box">
-            <h3 class="font-bold text-lg mb-4">Rejestracja</h3>
-            <.form
-              data-cy="register-form"
-              for={@form}
-              id="register-form"
-              phx-submit="register"
-              phx-change="validate_register"
-            >
-              <.input
-                field={@form[:email]}
-                type="email"
-                label="Email"
-                required
-              />
-              <.input
-                field={@form[:password]}
-                type="password"
-                label="Hasło"
-                required
-              />
-              <.input
-                field={@form[:password_confirmation]}
-                type="password"
-                label="Potwierdź hasło"
-                required
-              />
-              <div class="modal-action">
-                <button
-                  data-cy="register-cancel"
-                  type="button"
-                  phx-click="close_auth_form"
-                  class="btn"
-                >
-                  Anuluj
-                </button>
-                <button data-cy="register-submit" type="submit" class="btn btn-primary">
-                  Zarejestruj się
-                </button>
-              </div>
-            </.form>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="close_auth_form">zamknij</button>
-          </form>
-        </div>
-      <% end %>
+      <.modal
+        :if={@show_register_form}
+        data_cy="register-modal"
+        id="register-modal"
+        show={true}
+        on_cancel={JS.push("close_auth_form")}
+      >
+        <:title>Rejestracja</:title>
+        <.form
+          data-cy="register-form"
+          for={@form}
+          id="register-form"
+          phx-submit="register"
+          phx-change="validate_register"
+        >
+          <.input
+            field={@form[:email]}
+            type="email"
+            label="Email"
+            required
+          />
+          <.input
+            field={@form[:password]}
+            type="password"
+            label="Hasło"
+            required
+          />
+          <.input
+            field={@form[:password_confirmation]}
+            type="password"
+            label="Potwierdź hasło"
+            required
+          />
+        </.form>
+        <:actions>
+          <button
+            data-cy="register-cancel"
+            type="button"
+            phx-click="close_auth_form"
+            class="btn"
+          >
+            Anuluj
+          </button>
+          <button data-cy="register-submit" type="submit" form="register-form" class="btn btn-primary">
+            Zarejestruj się
+          </button>
+        </:actions>
+      </.modal>
 
       <%!-- Login Modal --%>
-      <%= if @show_login_form do %>
-        <div data-cy="login-modal" class="modal modal-open">
-          <div class="modal-box">
-            <h3 class="font-bold text-lg mb-4">Logowanie</h3>
-            <.form
-              data-cy="login-form"
-              for={@form}
-              id="login-form"
-              phx-submit="login"
-              phx-change="validate_login"
-            >
-              <.input
-                field={@form[:email]}
-                type="email"
-                label="Email"
-                required
-              />
-              <.input
-                field={@form[:password]}
-                type="password"
-                label="Hasło"
-                required
-              />
-              <div class="modal-action">
-                <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
-                  Anuluj
-                </button>
-                <button data-cy="login-submit" type="submit" class="btn btn-primary">
-                  Zaloguj
-                </button>
-              </div>
-            </.form>
-          </div>
-          <form method="dialog" class="modal-backdrop">
-            <button phx-click="close_auth_form">zamknij</button>
-          </form>
-        </div>
-      <% end %>
+      <.modal
+        :if={@show_login_form}
+        data_cy="login-modal"
+        id="login-modal"
+        show={true}
+        on_cancel={JS.push("close_auth_form")}
+      >
+        <:title>Logowanie</:title>
+        <.form
+          data-cy="login-form"
+          for={@form}
+          id="login-form"
+          phx-submit="login"
+          phx-change="validate_login"
+        >
+          <.input
+            field={@form[:email]}
+            type="email"
+            label="Email"
+            required
+          />
+          <.input
+            field={@form[:password]}
+            type="password"
+            label="Hasło"
+            required
+          />
+        </.form>
+        <:actions>
+          <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
+            Anuluj
+          </button>
+          <button data-cy="login-submit" type="submit" form="login-form" class="btn btn-primary">
+            Zaloguj
+          </button>
+        </:actions>
+      </.modal>
 
       <%!-- Features Section --%>
       <section class="container mx-auto px-4 py-16">

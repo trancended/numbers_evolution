@@ -1,0 +1,57 @@
+name: 'Quality Checks'
+description: 'Runs formatting, compilation, linting, and testing checks'
+
+inputs:
+  mix-env:
+    description: 'MIX_ENV to use'
+    required: true
+    default: 'test'
+  database-url:
+    description: 'Database URL for tests'
+    required: false
+  run-credo:
+    description: 'Whether to run Credo linting'
+    required: false
+    default: 'true'
+  run-tests:
+    description: 'Whether to run unit tests'
+    required: false
+    default: 'true'
+  run-precommit:
+    description: 'Whether to run pre-commit checks'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check code formatting
+      run: mix format --check-formatted
+      shell: bash
+
+    - name: Compile with warnings as errors
+      run: mix compile --warnings-as-errors
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}
+
+    - name: Run linting (Credo)
+      if: inputs.run-credo == 'true'
+      run: mix credo --strict
+      shell: bash
+
+    - name: Run unit tests
+      if: inputs.run-tests == 'true'
+      run: mix test
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}
+        DATABASE_URL: ${{ inputs.database-url }}
+
+    - name: Run pre-commit checks
+      if: inputs.run-precommit == 'true'
+      run: mix precommit
+      shell: bash
+      env:
+        MIX_ENV: ${{ inputs.mix-env }}
+        DATABASE_URL: ${{ inputs.database-url }}
