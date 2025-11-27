@@ -507,24 +507,21 @@ defmodule NumbersEvolutionWeb.CoreComponents do
 
   def modal(assigns) do
     ~H"""
-    <dialog
+    <div
       id={@id}
       data-cy={@data_cy}
       class={["modal", @show && "modal-open"]}
-      phx-hook="ModalDialog"
       phx-remove={hide_modal(@id)}
     >
       <div class="modal-box">
-        <form method="dialog" class="absolute right-4 top-4 z-10">
-          <button
-            type="button"
-            phx-click={@on_cancel || hide_modal(@id)}
-            class="btn btn-sm btn-circle btn-ghost hover:bg-base-200"
-            aria-label={gettext("close")}
-          >
-            <.icon name="hero-x-mark" class="size-5" />
-          </button>
-        </form>
+        <button
+          type="button"
+          phx-click={@on_cancel || hide_modal(@id)}
+          class="absolute right-4 top-4 z-10 btn btn-sm btn-circle btn-ghost hover:bg-base-200"
+          aria-label={gettext("close")}
+        >
+          <.icon name="hero-x-mark" class="size-5" />
+        </button>
         <h3 :if={@title != []} class="font-bold text-xl mb-6 pr-8 text-base-content">
           {render_slot(@title)}
         </h3>
@@ -535,7 +532,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
           {render_slot(@actions)}
         </div>
       </div>
-    </dialog>
+    </div>
     """
   end
 
@@ -543,6 +540,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
     js
     |> JS.hide(to: "##{id}", transition: "fade-out")
     |> JS.remove_class("modal-open", to: "##{id}")
+    |> JS.add_class("pointer-events-none", to: "##{id}")
   end
 
   @doc """

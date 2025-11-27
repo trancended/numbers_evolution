@@ -13,5 +13,8 @@
   },
   "devDependencies": {
     "cypress": "^13.6.0"
+  },
+  "dependencies": {
+    "@przeprogramowani/10x-mvp-tracker": "^1.0.1"
   }
 }

@@ -149,10 +149,18 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   @impl true
   def handle_event("validate_register", %{"user" => user_params}, socket) do
+    # Only validate if user has started typing meaningful content
+    email = Map.get(user_params, "email", "")
+
     changeset =
-      %Accounts.User{}
-      |> Accounts.User.registration_changeset(user_params)
-      |> Map.put(:action, :validate)
+      if String.length(email) > 2 do
+        %Accounts.User{}
+        |> Accounts.User.registration_changeset(user_params)
+        |> Map.put(:action, :validate)
+      else
+        %Accounts.User{}
+        |> Accounts.User.registration_changeset(user_params)
+      end
 
     form = to_form(changeset, as: :user)
     {:noreply, assign(socket, :register_form, form)}
@@ -1158,6 +1166,7 @@ defmodule NumbersEvolutionWeb.PageLive do
               id="register-form"
               phx-submit="register"
               phx-change="validate_register"
+              phx-debounce="blur"
             >
               <.input
                 field={@register_form[:email]}

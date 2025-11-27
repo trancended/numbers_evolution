@@ -31,12 +31,20 @@ if config_env() == :prod do
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
   config :numbers_evolution, NumbersEvolution.Repo,
-    # ssl: true,
+    ssl: true,
+    ssl_opts: [verify: :verify_peer, cacertfile: "/etc/ssl/certs/ca-certificates.crt"],
     url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
-    socket_options: maybe_ipv6
+    socket_options: maybe_ipv6,
+    # Increase timeouts for Fly.io
+    timeout: 30_000,
+    connect_timeout: 30_000,
+    handshake_timeout: 30_000,
+    # Queue settings
+    queue_target: 5000,
+    queue_interval: 1000
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -62,17 +70,11 @@ if config_env() == :prod do
   config :numbers_evolution, NumbersEvolutionWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0},
+      # Bind on all interfaces (IPv4) for Fly.io
+      ip: {0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base,
-    # Fly.io handles SSL termination, so we don't need to configure HTTPS here
-    # but we should force SSL redirects
-    force_ssl: [hsts: true]
+    secret_key_base: secret_key_base
 
   # ## SSL Support
   #

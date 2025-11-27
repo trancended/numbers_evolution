@@ -255,20 +255,23 @@
 
 .alert-warning {
   border-color: var(--color-warning);
-  background-color: color-mix(in oklch, var(--color-warning) 20%, transparent);
-  color: var(--color-warning-content);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  border-left: 4px solid var(--color-warning);
 }
 
 .alert-error {
   border-color: var(--color-error);
-  background-color: color-mix(in oklch, var(--color-error) 20%, transparent);
-  color: var(--color-error-content);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  border-left: 4px solid var(--color-error);
 }
 
 .alert-info {
   border-color: var(--color-info);
-  background-color: color-mix(in oklch, var(--color-info) 20%, transparent);
-  color: var(--color-info-content);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  border-left: 4px solid var(--color-info);
 }
 
 /* Badge styles */
@@ -319,11 +322,22 @@
   align-items: center;
   justify-content: center;
   z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out;
 }
 
-.modal::backdrop {
+.modal::before {
+  content: '';
+  position: fixed;
+  inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(2px);
+  z-index: -1;
+}
+
+.modal.modal-open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .modal-box {
@@ -710,12 +724,6 @@
   border-radius: 1rem;
 }
 
-/* Alert info variant */
-.alert-info {
-  border-color: var(--color-info);
-  background-color: color-mix(in oklch, var(--color-info) 20%, transparent);
-  color: var(--color-info-content);
-}
 
 /* Theme variables for light and dark modes */
 [data-theme="dark"] {
