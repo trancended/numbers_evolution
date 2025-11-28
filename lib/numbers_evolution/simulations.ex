@@ -220,6 +220,36 @@ defmodule NumbersEvolution.Simulations do
   end
 
   @doc """
+  Cleans up orphaned simulations that are marked as "running" but have no active processes.
+
+  This should be called on application startup to handle server restarts where
+  background simulation processes were lost but database still shows them as running.
+
+  ## Examples
+
+      iex> cleanup_orphaned_simulations()
+      :ok
+
+  """
+  @spec cleanup_orphaned_simulations() :: :ok
+  def cleanup_orphaned_simulations do
+    require Logger
+
+    # Mark all "running" simulations as "cancelled" since we can't resume them after restart
+    {count, _} =
+      Repo.update_all(
+        from(s in Simulation, where: s.status == "running"),
+        set: [status: "cancelled", updated_at: DateTime.utc_now()]
+      )
+
+    if count > 0 do
+      Logger.info("Marked #{count} orphaned running simulations as cancelled")
+    end
+
+    :ok
+  end
+
+  @doc """
   Retries a failed simulation by creating a new one with the same parameters.
 
   ## Examples
@@ -352,6 +382,91 @@ defmodule NumbersEvolution.Simulations do
   rescue
     Ecto.NoResultsError ->
       {:error, :not_found}
+  end
+
+  @doc """
+  Updates options for an existing simulation and resets its status to allow restarting.
+
+  This allows updating parameters of an existing simulation without creating a new record.
+  The simulation status is reset to "pending" and progress counters are cleared.
+
+  ## Examples
+
+      iex> update_simulation_options(user, "simulation-id", %{"max_attempts" => "2000000"})
+      {:ok, %Simulation{}}
+
+      iex> update_simulation_options(user, "invalid-id", %{})
+      {:error, :not_found}
+
+  """
+  @spec update_simulation_options(User.t(), binary(), map()) ::
+          {:ok, Simulation.t()} | {:error, Ecto.Changeset.t() | atom()}
+  def update_simulation_options(%User{id: _user_id} = user, simulation_id, new_options) do
+    with {:ok, simulation} <- get_simulation_with_details(user, simulation_id) do
+      # Validate that simulation can be restarted
+      if simulation.status in [
+           "pending",
+           "success",
+           "error",
+           "timeout",
+           "max_attempts_reached",
+           "cancelled"
+         ] do
+        parsed_options = parse_options(new_options)
+
+        # Merge new options with existing ones
+        existing_options = simulation.options || %{}
+        updated_options = Map.merge(existing_options, parsed_options)
+
+        simulation
+        |> Simulation.changeset(%{options: updated_options})
+        |> Ecto.Changeset.change(%{
+          status: "pending",
+          attempts_count: 0,
+          duration_seconds: 0.0,
+          started_at: nil,
+          completed_at: nil
+        })
+        |> Ecto.Changeset.put_embed(:result, nil)
+        |> Repo.update()
+      else
+        {:error, :simulation_running}
+      end
+    end
+  rescue
+    Ecto.NoResultsError ->
+      {:error, :not_found}
+  end
+
+  @doc """
+  Restarts an existing simulation with updated options.
+
+  This updates the simulation options and immediately starts the simulation process.
+  Equivalent to calling update_simulation_options followed by starting the simulation.
+
+  ## Examples
+
+      iex> restart_simulation(user, "simulation-id", %{"max_attempts" => "2000000"})
+      {:ok, %Simulation{}}
+
+      iex> restart_simulation(user, "running-simulation", %{})
+      {:error, :simulation_running}
+
+  """
+  @spec restart_simulation(User.t(), binary(), map()) ::
+          {:ok, Simulation.t()} | {:error, Ecto.Changeset.t() | atom()}
+  def restart_simulation(%User{id: _user_id} = user, simulation_id, new_options \\ %{}) do
+    with {:ok, updated_simulation} <- update_simulation_options(user, simulation_id, new_options),
+         {:ok, simulation_with_details} <- get_simulation_with_details(user, simulation_id) do
+      # Start the simulation process
+      start_simulation_task(
+        simulation_with_details,
+        simulation_with_details.strategy,
+        simulation_with_details.target_draw
+      )
+
+      {:ok, updated_simulation}
+    end
   end
 
   @doc """
@@ -872,6 +987,87 @@ defmodule NumbersEvolution.Simulations do
       require Logger
       Logger.error("Unexpected error deleting simulation: #{inspect(error)}")
       {:error, :unknown_error}
+  end
+
+  @doc """
+  Stops a running simulation by setting its status to "cancelled".
+
+  This immediately terminates the simulation process and updates the database.
+  Only works for simulations with status "running".
+
+  ## Examples
+
+      iex> stop_simulation(user, "simulation-id")
+      {:ok, %Simulation{}}
+
+      iex> stop_simulation(user, "not-running-simulation")
+      {:error, :not_running}
+
+  """
+  @spec stop_simulation(User.t(), binary()) :: {:ok, Simulation.t()} | {:error, atom()}
+  def stop_simulation(%User{id: _user_id} = user, simulation_id) do
+    with {:ok, simulation} <- get_simulation_with_details(user, simulation_id) do
+      if simulation.status == "running" do
+        simulation
+        |> Simulation.completion_changeset("cancelled", %{
+          attempts_count: simulation.attempts_count,
+          duration_seconds: simulation.duration_seconds
+        })
+        |> Repo.update()
+      else
+        {:error, :not_running}
+      end
+    end
+  rescue
+    Ecto.NoResultsError ->
+      {:error, :not_found}
+  end
+
+  @doc """
+  Resumes a cancelled simulation by changing its status back to "pending" and starting it.
+
+  This allows continuing a previously stopped simulation with its existing parameters.
+  Only works for simulations with status "cancelled".
+
+  ## Examples
+
+      iex> resume_simulation(user, "simulation-id")
+      {:ok, %Simulation{}}
+
+      iex> resume_simulation(user, "not-cancelled-simulation")
+      {:error, :not_cancelled}
+
+  """
+  @spec resume_simulation(User.t(), binary()) :: {:ok, Simulation.t()} | {:error, atom()}
+  def resume_simulation(%User{id: _user_id} = user, simulation_id) do
+    with {:ok, simulation} <- get_simulation_with_details(user, simulation_id) do
+      if simulation.status == "cancelled" do
+        # Reset simulation to pending state
+        simulation
+        |> Ecto.Changeset.change(%{
+          status: "pending",
+          started_at: nil,
+          completed_at: nil
+        })
+        |> Repo.update()
+        |> case do
+          {:ok, updated_simulation} ->
+            # Start the simulation process
+            start_simulation_task(
+              updated_simulation,
+              updated_simulation.strategy,
+              updated_simulation.target_draw
+            )
+
+            {:ok, updated_simulation}
+        end
+      else
+        {:error, :not_cancelled}
+      end
+    end
+  rescue
+    Ecto.NoResultsError ->
+      {:error, :not_found}
   end
 
   @doc """

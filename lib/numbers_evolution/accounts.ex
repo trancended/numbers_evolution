@@ -128,6 +128,20 @@ defmodule NumbersEvolution.Accounts do
   end
 
   @doc """
+  Lists all users in the system.
+
+  ## Examples
+
+      iex> list_users()
+      [%User{}, ...]
+
+  """
+  @spec list_users() :: [User.t()]
+  def list_users do
+    Repo.all(User)
+  end
+
+  @doc """
   Updates user preferences.
 
   ## Examples

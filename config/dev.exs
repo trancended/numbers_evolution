@@ -105,6 +105,9 @@ config :phoenix_live_view,
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
+# Configure admin user email
+config :numbers_evolution, :admin_user, System.get_env("ADMIN_USER") || "aa@aa.aa"
+
 # Configure OpenRouter AI provider for development
 config :numbers_evolution, :ai_provider, NumbersEvolution.Strategies.OpenRouterService
 

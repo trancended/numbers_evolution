@@ -10,6 +10,14 @@ defmodule NumbersEvolutionWeb.PageComponents do
 
   alias Phoenix.LiveView.JS
 
+  # Admin helper functions
+  defp admin?(user) when is_nil(user), do: false
+
+  defp admin?(user) do
+    admin_user = Application.get_env(:numbers_evolution, :admin_user, "aa@aa.aa")
+    user.email == admin_user
+  end
+
   # ============================================================================
   # Navigation Component
   # ============================================================================
@@ -79,6 +87,18 @@ defmodule NumbersEvolutionWeb.PageComponents do
               <.icon name="hero-sparkles" class="size-5 mr-2" /> Generator
             </button>
           </li>
+          <%= if @current_user && admin?(@current_user) do %>
+            <li>
+              <button
+                data-cy="nav-admin"
+                phx-click="navigate"
+                phx-value-section="admin"
+                class={["btn btn-ghost", @active_section == :admin && "btn-active"]}
+              >
+                <.icon name="hero-users" class="size-5 mr-2" /> Użytkownicy
+              </button>
+            </li>
+          <% end %>
           <li>
             <div class="dropdown dropdown-end">
               <label data-cy="user-menu" tabindex="0" class="btn btn-ghost gap-2">

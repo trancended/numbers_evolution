@@ -28,9 +28,9 @@ defmodule NumbersEvolution.Application do
     opts = [strategy: :one_for_one, name: NumbersEvolution.Supervisor]
 
     with {:ok, pid} <- Supervisor.start_link(children, opts) do
-      # Start pending simulations after Repo is ready (only in dev/prod)
+      # Clean up orphaned simulations and start pending ones after Repo is ready (only in dev/prod)
       unless System.get_env("MIX_ENV") == "test" do
-        :ok = start_pending_simulations_after_repo_ready()
+        :ok = cleanup_and_start_simulations_after_repo_ready()
       end
 
       # Setup E2E test database after Repo is ready
@@ -40,13 +40,14 @@ defmodule NumbersEvolution.Application do
     end
   end
 
-  defp start_pending_simulations_after_repo_ready do
-    # Wait a bit for Repo to be ready, then start pending simulations
+  defp cleanup_and_start_simulations_after_repo_ready do
+    # Wait a bit for Repo to be ready, then cleanup orphaned simulations and start pending ones
     # Use Task.Supervisor to ensure Repo access
     Task.Supervisor.start_child(
       NumbersEvolution.TaskSupervisor,
       fn ->
         Process.sleep(2000)
+        NumbersEvolution.Simulations.cleanup_orphaned_simulations()
         NumbersEvolution.Simulations.start_pending_simulations()
       end
     )

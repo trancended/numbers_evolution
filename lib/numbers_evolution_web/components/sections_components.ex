@@ -60,26 +60,30 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         id="strategy-form-modal"
         show={@show_strategy_form}
         on_cancel={JS.push("close_strategy_form")}
+        size="lg"
       >
         <:title>Nowa Strategia</:title>
 
-        <div class="tabs tabs-boxed mb-4">
+        <div class="tabs tabs-boxed tabs-lg mb-6">
           <button
             data-cy="ai-tab"
             phx-click="switch_strategy_tab"
             phx-value-tab="ai"
-            class={["tab", @strategy_form_tab == :ai && "tab-active"]}
+            class={["tab tab-lg font-semibold", @strategy_form_tab == :ai && "tab-active"]}
           >
-            <.icon name="hero-sparkles" class="size-4" /> AI
+            <.icon name="hero-sparkles" class="size-5 mr-2" /> AI
           </button>
           <button
             data-cy="manual-tab"
             phx-click="switch_strategy_tab"
             phx-value-tab="manual"
-            class={["tab", @strategy_form_tab == :manual && "tab-active"]}
+            class={[
+              "tab tab-lg font-semibold opacity-60",
+              @strategy_form_tab == :manual && "tab-active"
+            ]}
             disabled
           >
-            Manualna (wkrótce)
+            <.icon name="hero-wrench-screwdriver" class="size-5 mr-2" /> Manualna (wkrótce)
           </button>
         </div>
 
@@ -211,7 +215,6 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       <% else %>
         <%!-- Formularz promptu --%>
         <.alert kind="info" class="text-sm">
-          <.icon name="hero-information-circle" class="size-5" />
           <strong>Opisz strategię słowami</strong> - AI wygeneruje odpowiednie reguły typowania.
         </.alert>
 
@@ -242,11 +245,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="tylko_nieparzyste"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">Tylko Nieparzyste</div>
-                <div class="text-xs opacity-70">Pomija wszystkie parzyste</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">Tylko Nieparzyste</div>
+                <div class="text-xs opacity-70 text-left w-full">Pomija wszystkie parzyste</div>
               </div>
             </button>
 
@@ -255,11 +258,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="dwie_nieparzyste_trzy_parzyste"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">2 Nieparzyste, 3 Parzyste</div>
-                <div class="text-xs opacity-70">Precyzyjne ratio</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">2 Nieparzyste, 3 Parzyste</div>
+                <div class="text-xs opacity-70 text-left w-full">Precyzyjne ratio</div>
               </div>
             </button>
 
@@ -268,11 +271,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="max_dwie_w_dziesiatce"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">Max 2 w Dziesiątce</div>
-                <div class="text-xs opacity-70">Rozproszone liczby</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">Max 2 w Dziesiątce</div>
+                <div class="text-xs opacity-70 text-left w-full">Rozproszone liczby</div>
               </div>
             </button>
 
@@ -281,11 +284,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="balans_hot_cold"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">Balans Hot/Cold</div>
-                <div class="text-xs opacity-70">Zrównoważona strategia</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">Balans Hot/Cold</div>
+                <div class="text-xs opacity-70 text-left w-full">Zrównoważona strategia</div>
               </div>
             </button>
 
@@ -294,11 +297,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="ekstremalna_hot"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">Ekstremalna Hot</div>
-                <div class="text-xs opacity-70">80% gorących liczb</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">Ekstremalna Hot</div>
+                <div class="text-xs opacity-70 text-left w-full">80% gorących liczb</div>
               </div>
             </button>
 
@@ -307,11 +310,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               type="button"
               phx-click="use_strategy_template"
               phx-value-strategy="przeciwny_trend"
-              class="btn btn-sm btn-outline justify-start text-left h-auto py-3"
+              class="btn btn-sm btn-outline justify-start text-left min-h-[4rem] py-3"
             >
-              <div>
-                <div class="font-semibold">Przeciwny Trend</div>
-                <div class="text-xs opacity-70">Gra na cold numbers</div>
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">Przeciwny Trend</div>
+                <div class="text-xs opacity-70 text-left w-full">Gra na cold numbers</div>
               </div>
             </button>
           </div>
@@ -329,49 +332,49 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
   defp strategy_card(assigns) do
     ~H"""
-    <.card>
-      <div class="flex-1">
-        <div class="flex items-center gap-2 mb-2">
-          <h3 class="font-bold text-lg">{@strategy.name}</h3>
-          <.badge
-            variant={if @strategy.type == :ai_generated, do: "success", else: "info"}
-            size="sm"
-          >
-            {if @strategy.type == :ai_generated, do: "AI", else: "Manual"}
-          </.badge>
-        </div>
+    <.card class="flex flex-col h-full">
+      <div class="flex items-center gap-2 mb-2">
+        <h3 class="font-bold text-lg">{@strategy.name}</h3>
+        <.badge
+          variant={if @strategy.type == :ai_generated, do: "success", else: "info"}
+          size="sm"
+        >
+          {if @strategy.type == :ai_generated, do: "AI", else: "Manual"}
+        </.badge>
+      </div>
 
-        <p :if={@strategy.description} class="text-sm text-base-content/70 mb-4">
+      <div class="h-16">
+        <p :if={@strategy.description} class="text-sm text-base-content/70 line-clamp-3">
           {@strategy.description}
         </p>
+      </div>
 
-        <div class="stats stats-horizontal shadow w-full mb-4">
-          <div class="stat p-3">
-            <div class="stat-title text-xs">Performance</div>
-            <div class="stat-value text-base">
-              {if @strategy.performance_score,
-                do: Float.round(@strategy.performance_score, 2),
-                else: "—"}
-            </div>
+      <div class="stats stats-horizontal shadow w-full mb-4">
+        <div class="stat p-3">
+          <div class="stat-title text-xs">Performance</div>
+          <div class="stat-value text-base">
+            {if @strategy.performance_score,
+              do: Float.round(@strategy.performance_score, 2),
+              else: "—"}
           </div>
         </div>
+      </div>
 
-        <div class="flex gap-2 flex-wrap">
-          <button class="btn btn-sm btn-ghost">
-            <.icon name="hero-eye" class="size-4" /> Szczegóły
-          </button>
-          <button
-            id={"delete-strategy-#{@strategy.id}"}
-            type="button"
-            phx-click="delete_strategy"
-            phx-click.stop
-            phx-value-id={@strategy.id}
-            phx-hook="ConfirmDelete"
-            class="btn btn-sm btn-error"
-          >
-            <.icon name="hero-trash" class="size-4" /> Usuń
-          </button>
-        </div>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-ghost">
+          <.icon name="hero-eye" class="size-4" /> Szczegóły
+        </button>
+        <button
+          id={"delete-strategy-#{@strategy.id}"}
+          type="button"
+          phx-click="delete_strategy"
+          phx-click.stop
+          phx-value-id={@strategy.id}
+          phx-hook="ConfirmDelete"
+          class="btn btn-sm btn-error"
+        >
+          <.icon name="hero-trash" class="size-4" /> Usuń
+        </button>
       </div>
     </.card>
     """
@@ -761,14 +764,34 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                     />
                     {if sim.is_favorite, do: "Oznaczona", else: "Oznacz"}
                   </button>
-                  <%= if sim.status in ["error", "timeout", "max_attempts_reached", "success", "cancelled", "running"] do %>
+                  <%= if sim.status == "running" do %>
                     <button
-                      phx-click="retry_simulation"
+                      phx-click="stop_simulation"
+                      phx-value-id={sim.id}
+                      class="btn btn-sm btn-warning"
+                      title="Zatrzymaj symulację"
+                    >
+                      <.icon name="hero-stop" class="size-4" /> {"Zatrzymaj"}
+                    </button>
+                  <% end %>
+                  <%= if sim.status == "cancelled" do %>
+                    <button
+                      phx-click="resume_simulation"
+                      phx-value-id={sim.id}
+                      class="btn btn-sm btn-success"
+                      title="Wznów zatrzymaną symulację"
+                    >
+                      <.icon name="hero-play" class="size-4" /> {"Wznów"}
+                    </button>
+                  <% end %>
+                  <%= if sim.status not in ["running", "cancelled"] do %>
+                    <button
+                      phx-click="show_restart_simulation"
                       phx-value-id={sim.id}
                       class="btn btn-sm btn-primary"
-                      title="Ponów symulację"
+                      title="Uruchom ponownie z nowymi ustawieniami"
                     >
-                      <.icon name="hero-arrow-path" class="size-4" /> {"Ponów"}
+                      <.icon name="hero-play" class="size-4" /> {"Uruchom ponownie"}
                     </button>
                   <% end %>
                   <button
@@ -1033,33 +1056,34 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     <form phx-submit="generate_coupons" class="card bg-base-100 shadow-xl">
       <div class="card-body">
         <h2 class="card-title">Generuj propozycje</h2>
-        <div class="form-control mt-6">
-          <label class="label mb-3">
-            <span class="label-text">Wybierz strategię</span>
-          </label>
-          <select name="strategy_id" class="select select-bordered" required>
-            <option value="" disabled selected>Wybierz strategię...</option>
-            <%= for strategy <- @strategies do %>
-              <option value={strategy.id}>{strategy.name}</option>
-            <% end %>
-          </select>
-        </div>
-        <div class="form-control">
-          <label class="label mb-3">
-            <span class="label-text">Liczba kuponów (1-10)</span>
-          </label>
-          <input
-            type="range"
-            name="coupons_count"
-            min="1"
-            max="10"
-            value="3"
-            class="range range-primary"
-          />
-          <div class="flex justify-between text-xs mt-2">
-            <span>1</span>
-            <span>5</span>
-            <span>10</span>
+        <div class="flex gap-6 mt-6">
+          <div class="form-control flex-1">
+            <label class="label mb-3">
+              <span class="label-text">Wybierz strategię</span>
+            </label>
+            <select name="strategy_id" class="select select-bordered" required>
+              <option value="" disabled selected>Wybierz strategię...</option>
+              <%= for strategy <- @strategies do %>
+                <option value={strategy.id}>{strategy.name}</option>
+              <% end %>
+            </select>
+          </div>
+          <div class="form-control flex-1">
+            <label class="label mb-3">
+              <span class="label-text">Liczba kuponów (1-10)</span>
+            </label>
+            <input
+              type="range"
+              name="coupons_count"
+              min="1"
+              max="10"
+              value="3"
+              class="range range-primary"
+            />
+            <div class="flex justify-between text-xs mt-2">
+              <span>1</span>
+              <span>10</span>
+            </div>
           </div>
         </div>
         <button type="submit" class="btn btn-primary mt-4">

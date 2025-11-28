@@ -36,5 +36,8 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
+# Configure admin user email for tests
+config :numbers_evolution, :admin_user, System.get_env("ADMIN_USER") || "aa@aa.aa"
+
 # Configure mocks for testing
 config :numbers_evolution, :http_client, NumbersEvolution.HTTPClientMock

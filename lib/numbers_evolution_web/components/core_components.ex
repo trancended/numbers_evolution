@@ -500,6 +500,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   attr(:show, :boolean, default: false)
   attr(:on_cancel, :any, default: nil)
   attr(:data_cy, :string)
+  attr(:size, :string, default: nil)
 
   slot(:title)
   slot(:inner_block, required: true)
@@ -513,7 +514,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
       class={["modal", @show && "modal-open"]}
       phx-remove={hide_modal(@id)}
     >
-      <div class="modal-box">
+      <div class={["modal-box", @size && "modal-#{@size}"]}>
         <button
           type="button"
           phx-click={@on_cancel || hide_modal(@id)}
@@ -779,6 +780,11 @@ defmodule NumbersEvolutionWeb.CoreComponents do
         icon: "hero-x-circle",
         text: "Błąd",
         class: "text-error"
+      },
+      "cancelled" => %{
+        icon: "hero-x-mark",
+        text: "Anulowana",
+        class: "text-base-content/50"
       }
     }
 

@@ -125,6 +125,10 @@ if config_env() == :prod do
   #
   # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 
+  # Configure admin user email
+  admin_user = System.get_env("ADMIN_USER") || "aa@aa.aa"
+  config :numbers_evolution, :admin_user, admin_user
+
   # Configure OpenRouter AI provider for production
   config :numbers_evolution, :ai_provider, NumbersEvolution.Strategies.OpenRouterService
 

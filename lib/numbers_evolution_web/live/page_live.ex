@@ -11,8 +11,10 @@ defmodule NumbersEvolutionWeb.PageLive do
   """
   use NumbersEvolutionWeb, :live_view
 
-  alias NumbersEvolution.{Accounts, Draws, Simulations, Strategies}
+  alias NumbersEvolution.{Accounts, Draws, Repo, Simulations, Strategies}
   alias NumbersEvolution.Strategies.Generator
+
+  import Ecto.Query
 
   # Import section components
   import NumbersEvolutionWeb.PageComponents
@@ -40,6 +42,8 @@ defmodule NumbersEvolutionWeb.PageLive do
       |> assign(:show_update_timeout_modal, false)
       |> assign(:update_timeout_simulation_id, nil)
       |> assign(:update_timeout_form, to_form(%{}, as: :update_timeout))
+      |> assign(:show_restart_simulation_modal, false)
+      |> assign(:restart_simulation_id, nil)
       |> assign(:register_form, to_form(%{}, as: :user))
       |> assign(:login_form, to_form(%{}, as: :user))
       |> assign(:live_attempts, %{})
@@ -110,12 +114,31 @@ defmodule NumbersEvolutionWeb.PageLive do
   def handle_event("navigate", %{"section" => section}, socket) do
     section_atom = String.to_existing_atom(section)
 
-    socket =
-      socket
-      |> assign(:active_section, section_atom)
-      |> load_section_data(section_atom)
+    # Check admin access for admin section
+    if section_atom == :admin do
+      current_user = socket.assigns.current_user
 
-    {:noreply, socket}
+      if admin?(current_user) do
+        socket =
+          socket
+          |> assign(:active_section, section_atom)
+          |> load_section_data(section_atom)
+
+        {:noreply, socket}
+      else
+        {:noreply,
+         socket
+         |> put_flash(:error, "Brak dostępu do panelu administratora")
+         |> assign(:active_section, :dashboard)}
+      end
+    else
+      socket =
+        socket
+        |> assign(:active_section, section_atom)
+        |> load_section_data(section_atom)
+
+      {:noreply, socket}
+    end
   end
 
   # Authentication events
@@ -384,6 +407,41 @@ defmodule NumbersEvolutionWeb.PageLive do
   end
 
   @impl true
+  def handle_event("restart_simulation", %{"id" => simulation_id} = params, socket) do
+    user = socket.assigns.current_user
+
+    # Remove the id from params since it's not needed for restart options
+    restart_params = Map.delete(params, "id")
+
+    case Simulations.restart_simulation(user, simulation_id, restart_params) do
+      {:ok, simulation} ->
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została zaktualizowana i uruchomiona ponownie!")
+          |> load_simulations()
+          |> load_dashboard_data()
+          |> subscribe_to_simulation(simulation.id)
+
+        {:noreply, socket}
+
+      {:error, :simulation_running} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie można zaktualizować symulacji - jest już uruchomiona")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+
+      {:error, changeset} when is_struct(changeset) ->
+        errors = translate_errors(changeset)
+        {:noreply, put_flash(socket, :error, "Błąd walidacji: #{errors}")}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Nie udało się zaktualizować symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
   def handle_event("retry_simulation", %{"id" => simulation_id}, socket) do
     user = socket.assigns.current_user
 
@@ -407,6 +465,51 @@ defmodule NumbersEvolutionWeb.PageLive do
       {:error, reason} ->
         {:noreply,
          put_flash(socket, :error, "Nie udało się ponowić symulacji: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("stop_simulation", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.stop_simulation(user, simulation_id) do
+      {:ok, _simulation} ->
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została zatrzymana")
+          |> load_simulations()
+          |> load_dashboard_data()
+
+        {:noreply, socket}
+
+      {:error, :not_running} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie jest uruchomiona")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+    end
+  end
+
+  @impl true
+  def handle_event("resume_simulation", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.resume_simulation(user, simulation_id) do
+      {:ok, simulation} ->
+        socket =
+          socket
+          |> put_flash(:info, "Symulacja została wznowiona")
+          |> load_simulations()
+          |> load_dashboard_data()
+          |> subscribe_to_simulation(simulation.id)
+
+        {:noreply, socket}
+
+      {:error, :not_cancelled} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie może zostać wznowiona")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
     end
   end
 
@@ -624,6 +727,37 @@ defmodule NumbersEvolutionWeb.PageLive do
     end
   end
 
+  @impl true
+  def handle_event("show_restart_simulation", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.get_simulation_with_details(user, simulation_id) do
+      %{} = simulation ->
+        socket =
+          socket
+          |> assign(:show_restart_simulation_modal, true)
+          |> assign(:restart_simulation_id, simulation_id)
+          |> assign(:restart_simulation, simulation)
+
+        {:noreply, socket}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+    end
+  rescue
+    Ecto.NoResultsError ->
+      {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+  end
+
+  @impl true
+  def handle_event("close_restart_simulation_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_restart_simulation_modal, false)
+     |> assign(:restart_simulation_id, nil)
+     |> assign(:restart_simulation, nil)}
+  end
+
   # Generator section events
   @impl true
   def handle_event("generate_coupons", params, socket) do
@@ -740,6 +874,9 @@ defmodule NumbersEvolutionWeb.PageLive do
     |> assign(:simulations, [])
     |> assign(:draws, [])
     |> assign(:top_strategies, [])
+    |> assign(:users, [])
+    |> assign(:user_stats, %{})
+    |> assign(:recent_activities, [])
     |> assign(:show_strategy_form, false)
     |> assign(:strategy_form_tab, :ai)
     |> assign(:selected_strategy, nil)
@@ -753,6 +890,7 @@ defmodule NumbersEvolutionWeb.PageLive do
   defp load_section_data(socket, :simulations), do: load_simulations(socket)
   defp load_section_data(socket, :ranking), do: load_ranking(socket)
   defp load_section_data(socket, :generator), do: load_generator_data(socket)
+  defp load_section_data(socket, :admin), do: load_admin_data(socket)
   defp load_section_data(socket, :dashboard), do: load_dashboard_data(socket)
   defp load_section_data(socket, _), do: socket
 
@@ -784,6 +922,26 @@ defmodule NumbersEvolutionWeb.PageLive do
         else: []
 
     assign(socket, :top_strategies, top_strategies)
+  end
+
+  defp load_admin_data(socket) do
+    # Load all users, their stats, and recent activities
+    users = Accounts.list_users()
+
+    user_stats =
+      Enum.map(users, fn user ->
+        stats = Accounts.get_user_stats(user)
+        {user.id, stats}
+      end)
+      |> Map.new()
+
+    # Get recent activities (simulations, strategies created)
+    recent_activities = get_recent_activities()
+
+    socket
+    |> assign(:users, users)
+    |> assign(:user_stats, user_stats)
+    |> assign(:recent_activities, recent_activities)
   end
 
   defp load_dashboard_data(socket) do
@@ -843,6 +1001,40 @@ defmodule NumbersEvolutionWeb.PageLive do
   defp find_strategy(socket, strategy_id) do
     Enum.find(socket.assigns[:top_strategies] || [], fn s -> s.id == strategy_id end) ||
       Enum.find(socket.assigns[:strategies] || [], fn s -> s.id == strategy_id end)
+  end
+
+  # Admin helper functions
+  defp admin?(user) when is_nil(user), do: false
+
+  defp admin?(user) do
+    admin_user = Application.get_env(:numbers_evolution, :admin_user, "aa@aa.aa")
+    user.email == admin_user
+  end
+
+  defp get_recent_activities do
+    # Get recent simulations across all users
+    recent_simulations =
+      from(s in NumbersEvolution.Simulations.Simulation,
+        order_by: [desc: s.inserted_at],
+        limit: 20,
+        preload: [:user, :strategy]
+      )
+      |> Repo.all()
+
+    # Get recent strategies across all users
+    recent_strategies =
+      from(s in NumbersEvolution.Strategies.Strategy,
+        where: s.status == "active",
+        order_by: [desc: s.inserted_at],
+        limit: 20,
+        preload: :user
+      )
+      |> Repo.all()
+
+    # Combine and sort by creation date
+    (recent_simulations ++ recent_strategies)
+    |> Enum.sort_by(& &1.inserted_at, :desc)
+    |> Enum.take(20)
   end
 
   defp build_strategy_pools_map(simulations) do
@@ -1017,6 +1209,13 @@ defmodule NumbersEvolutionWeb.PageLive do
                 top_strategies={assigns[:top_strategies] || []}
                 generated_coupons={@generated_coupons}
               />
+            <% :admin -> %>
+              <.admin_section
+                current_user={@current_user}
+                users={assigns[:users] || []}
+                user_stats={assigns[:user_stats] || %{}}
+                recent_activities={assigns[:recent_activities] || []}
+              />
             <% _ -> %>
               <.dashboard_section
                 current_user={@current_user}
@@ -1106,6 +1305,146 @@ defmodule NumbersEvolutionWeb.PageLive do
                 </button>
               </div>
             </.form>
+          </.modal>
+        <% end %>
+
+        <%!-- Restart Simulation Modal --%>
+        <%= if @show_restart_simulation_modal do %>
+          <.modal
+            id="restart-simulation-modal"
+            show={true}
+            on_cancel={JS.push("close_restart_simulation_modal")}
+          >
+            <:title>Uruchom ponownie symulację</:title>
+            <%= if @restart_simulation do %>
+              <div class="space-y-4">
+                <div class="bg-base-200 p-4 rounded-lg">
+                  <h4 class="font-semibold mb-2">Aktualne ustawienia symulacji:</h4>
+                  <div class="space-y-2 text-sm">
+                    <div><strong>Strategia:</strong> {@restart_simulation.strategy.name}</div>
+                    <div>
+                      <strong>Maksymalna liczba prób:</strong> {format_number(
+                        @restart_simulation.options["max_attempts"] || 1_000_000
+                      )}
+                    </div>
+                    <div>
+                      <strong>Timeout:</strong> {format_number(
+                        @restart_simulation.options["timeout_seconds"] || 86400
+                      )} sekund
+                    </div>
+                    <div>
+                      <strong>Tryb pół-losowy:</strong> {if @restart_simulation.options[
+                                                              "half_random_mode"
+                                                            ], do: "Tak", else: "Nie"}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="alert alert-info">
+                  <span class="hero-exclamation-triangle size-5 shrink-0"></span>
+                  <div>
+                    <p class="font-semibold">
+                      Symulacja zostanie zaktualizowana i uruchomiona ponownie
+                    </p>
+                    <p>
+                      Wprowadź nowe parametry poniżej. Wszystkie dotychczasowe wyniki zostaną wyczyszczone.
+                    </p>
+                  </div>
+                </div>
+
+                <.form
+                  for={%{}}
+                  id="restart-simulation-form"
+                  phx-submit="restart_simulation"
+                  phx-value-id={@restart_simulation_id}
+                >
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                      <label class="label mb-3">
+                        <span class="label-text">Maksymalna liczba prób</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="max_attempts"
+                        class="input input-bordered"
+                        placeholder={@restart_simulation.options["max_attempts"] || "1000000"}
+                        min="1000"
+                        max="999999999"
+                      />
+                      <label class="label">
+                        <span class="label-text-alt text-sm font-normal">
+                          Aktualnie: {format_number(
+                            @restart_simulation.options["max_attempts"] || 1_000_000
+                          )}
+                        </span>
+                      </label>
+                    </div>
+
+                    <div class="form-control">
+                      <label class="label mb-3">
+                        <span class="label-text">Timeout (sekundy)</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="timeout_seconds"
+                        class="input input-bordered"
+                        placeholder={@restart_simulation.options["timeout_seconds"] || "86400"}
+                        min="10"
+                        max="86400"
+                      />
+                      <label class="label">
+                        <span class="label-text-alt text-sm font-normal">
+                          Aktualnie: {format_number(
+                            @restart_simulation.options["timeout_seconds"] || 86400
+                          )}s
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <details class="collapse collapse-arrow bg-base-100">
+                    <summary class="collapse-title font-medium">
+                      Opcje zaawansowane
+                    </summary>
+                    <div class="collapse-content space-y-4">
+                      <div class="form-control">
+                        <label class="label cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id="restart_half_random_mode_checkbox"
+                            name="half_random_mode"
+                            value="true"
+                            class="checkbox checkbox-primary"
+                            phx-hook="HalfRandomMode"
+                          />
+                          <span class="label-text ml-2">Losowo pomin połowę</span>
+                        </label>
+                        <label class="label">
+                          <span class="label-text-alt">
+                            Aktualnie: {if @restart_simulation.options["half_random_mode"],
+                              do: "Włączone",
+                              else: "Wyłączone"}
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </details>
+
+                  <div class="modal-action">
+                    <button
+                      type="button"
+                      phx-click="close_restart_simulation_modal"
+                      class="btn"
+                    >
+                      Anuluj
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                      <.icon name="hero-arrow-path" class="size-5" /> Uruchom ponownie
+                    </button>
+                  </div>
+                </.form>
+              </div>
+            <% end %>
           </.modal>
         <% end %>
       <% else %>
@@ -1321,6 +1660,125 @@ defmodule NumbersEvolutionWeb.PageLive do
   end
 
   # ============================================================================
+  # Admin Section
+  # ============================================================================
+
+  @doc """
+  Renders the admin dashboard with user overview and activities.
+  """
+  attr(:current_user, :map, required: true)
+  attr(:users, :list, required: true)
+  attr(:user_stats, :map, required: true)
+  attr(:recent_activities, :list, required: true)
+
+  def admin_section(assigns) do
+    ~H"""
+    <div class="space-y-8">
+      <div class="flex items-center gap-4">
+        <h1 class="text-4xl font-bold">Panel Administratora</h1>
+        <.badge variant="success" size="lg">Admin: {@current_user.email}</.badge>
+      </div>
+
+      <%!-- User Statistics Overview --%>
+      <.card>
+        <:title>Podsumowanie użytkowników</:title>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="stat">
+            <div class="stat-title">Liczba użytkowników</div>
+            <div class="stat-value text-primary">{length(@users)}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Razem strategii</div>
+            <div class="stat-value text-secondary">
+              {Enum.sum(Enum.map(@user_stats, fn {_id, stats} -> stats.strategies_count end))}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Razem symulacji</div>
+            <div class="stat-value text-accent">
+              {Enum.sum(Enum.map(@user_stats, fn {_id, stats} -> stats.simulations_count end))}
+            </div>
+          </div>
+        </div>
+      </.card>
+
+      <%!-- Users Table --%>
+      <.card>
+        <:title>Wszyscy użytkownicy</:title>
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Data rejestracji</th>
+                <th>Strategii</th>
+                <th>Symulacji</th>
+                <th>Najlepsza strategia</th>
+              </tr>
+            </thead>
+            <tbody>
+              <%= for user <- @users do %>
+                <tr>
+                  <td class="font-medium">{user.email}</td>
+                  <td>{Calendar.strftime(user.inserted_at, "%Y-%m-%d %H:%M")}</td>
+                  <td>{Map.get(@user_stats, user.id, %{strategies_count: 0}).strategies_count}</td>
+                  <td>{Map.get(@user_stats, user.id, %{simulations_count: 0}).simulations_count}</td>
+                  <td>
+                    <%= if best = Map.get(@user_stats, user.id, %{best_strategy: nil}).best_strategy do %>
+                      {best.name} ({Float.round(best.performance_score || 0, 2)})
+                    <% else %>
+                      Brak
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </.card>
+
+      <%!-- Recent Activities --%>
+      <.card>
+        <:title>Ostatnie aktywności</:title>
+        <div class="space-y-3">
+          <%= for activity <- @recent_activities do %>
+            <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+              <div class="flex-shrink-0">
+                <%= if Map.has_key?(activity, :name) do %>
+                  <.icon name="hero-light-bulb" class="size-5 text-warning" />
+                <% else %>
+                  <.icon name="hero-chart-bar" class="size-5 text-info" />
+                <% end %>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">
+                    <%= cond do %>
+                      <% Map.has_key?(activity, :name) -> %>
+                        Strategia: {activity.name}
+                      <% Ecto.assoc_loaded?(activity.strategy) -> %>
+                        Symulacja: {activity.strategy.name}
+                      <% true -> %>
+                        Symulacja
+                    <% end %>
+                  </span>
+                  <span class="text-sm text-base-content/60">
+                    {activity.user.email}
+                  </span>
+                </div>
+                <div class="text-sm text-base-content/70">
+                  {Calendar.strftime(activity.inserted_at, "%Y-%m-%d %H:%M")}
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </.card>
+    </div>
+    """
+  end
+
+  # ============================================================================
   # Private Helpers - Feature Card Component
   # ============================================================================
 
@@ -1339,4 +1797,20 @@ defmodule NumbersEvolutionWeb.PageLive do
     </div>
     """
   end
+
+  # ============================================================================
+  # Private Helpers - Utility Functions
+  # ============================================================================
+
+  defp format_number(number) when is_integer(number) do
+    number
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.graphemes()
+    |> Enum.chunk_every(3)
+    |> Enum.map_join(",", &Enum.join/1)
+    |> String.reverse()
+  end
+
+  defp format_number(number), do: to_string(number)
 end
