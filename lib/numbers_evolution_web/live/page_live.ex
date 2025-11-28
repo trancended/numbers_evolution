@@ -276,20 +276,6 @@ defmodule NumbersEvolutionWeb.PageLive do
       {:noreply, put_flash(socket, :error, "Nie znaleziono strategii")}
   end
 
-  @impl true
-  def handle_event("toggle_strategy_select", %{"id" => id}, socket) do
-    selected = socket.assigns.selected_strategies
-
-    new_selected =
-      if id in selected do
-        List.delete(selected, id)
-      else
-        [id | selected]
-      end
-
-    {:noreply, assign(socket, :selected_strategies, new_selected)}
-  end
-
   # Simulations section events
   @impl true
   def handle_event("strategy_changed", %{"strategy_id" => strategy_id}, socket) do
@@ -753,9 +739,9 @@ defmodule NumbersEvolutionWeb.PageLive do
     |> assign(:strategies, [])
     |> assign(:simulations, [])
     |> assign(:draws, [])
+    |> assign(:top_strategies, [])
     |> assign(:show_strategy_form, false)
     |> assign(:strategy_form_tab, :ai)
-    |> assign(:selected_strategies, [])
     |> assign(:selected_strategy, nil)
     |> assign(:target_validation_error, nil)
     |> assign(:generated_coupons, [])
@@ -819,11 +805,13 @@ defmodule NumbersEvolutionWeb.PageLive do
 
   defp load_simulations(socket) do
     user = socket.assigns.current_user
+    strategies = if user, do: Strategies.list_strategies(user), else: []
     simulations = if user, do: Simulations.list_simulations(user), else: []
     draws = Draws.list_draws(limit: 50)
     strategy_pools = build_strategy_pools_map(simulations)
 
     socket
+    |> assign(:strategies, strategies)
     |> assign(:simulations, simulations)
     |> assign(:draws, draws)
     |> assign(:strategy_pools, strategy_pools)
@@ -1007,7 +995,6 @@ defmodule NumbersEvolutionWeb.PageLive do
             <% :strategies -> %>
               <.strategies_section
                 strategies={@strategies}
-                selected_strategies={@selected_strategies}
                 show_strategy_form={@show_strategy_form}
                 strategy_form_tab={@strategy_form_tab}
                 generated_strategy={@generated_strategy}

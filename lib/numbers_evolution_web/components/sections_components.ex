@@ -17,7 +17,6 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   Renders the strategies management section.
   """
   attr(:strategies, :list, required: true)
-  attr(:selected_strategies, :list, required: true)
   attr(:show_strategy_form, :boolean, required: true)
   attr(:strategy_form_tab, :atom, required: true)
   attr(:generated_strategy, :map, default: nil)
@@ -29,14 +28,6 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       <div class="flex justify-between items-center">
         <h1 class="text-4xl font-bold">Moje Strategie</h1>
         <div class="flex gap-4">
-          <button
-            :if={length(@selected_strategies) >= 2}
-            data-cy="create-mix-btn"
-            class="btn btn-secondary"
-            disabled
-          >
-            <.icon name="hero-beaker" class="size-5" /> Utwórz mix ({length(@selected_strategies)})
-          </button>
           <button data-cy="create-strategy-btn" phx-click="open_strategy_form" class="btn btn-primary">
             <.icon name="hero-plus" class="size-5" /> Nowa strategia
           </button>
@@ -58,7 +49,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       <% else %>
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <%= for strategy <- @strategies do %>
-            <.strategy_card strategy={strategy} selected={strategy.id in @selected_strategies} />
+            <.strategy_card strategy={strategy} />
           <% end %>
         </div>
       <% end %>
@@ -335,62 +326,51 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   end
 
   attr(:strategy, :map, required: true)
-  attr(:selected, :boolean, required: true)
 
   defp strategy_card(assigns) do
     ~H"""
     <.card>
-      <div class="flex items-start gap-3">
-        <input
-          type="checkbox"
-          phx-click="toggle_strategy_select"
-          phx-click.stop
-          phx-value-id={@strategy.id}
-          checked={@selected}
-          class="checkbox checkbox-primary mt-1"
-        />
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-2">
-            <h3 class="font-bold text-lg">{@strategy.name}</h3>
-            <.badge
-              variant={if @strategy.type == :ai_generated, do: "success", else: "info"}
-              size="sm"
-            >
-              {if @strategy.type == :ai_generated, do: "AI", else: "Manual"}
-            </.badge>
-          </div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-2">
+          <h3 class="font-bold text-lg">{@strategy.name}</h3>
+          <.badge
+            variant={if @strategy.type == :ai_generated, do: "success", else: "info"}
+            size="sm"
+          >
+            {if @strategy.type == :ai_generated, do: "AI", else: "Manual"}
+          </.badge>
+        </div>
 
-          <p :if={@strategy.description} class="text-sm text-base-content/70 mb-4">
-            {@strategy.description}
-          </p>
+        <p :if={@strategy.description} class="text-sm text-base-content/70 mb-4">
+          {@strategy.description}
+        </p>
 
-          <div class="stats stats-horizontal shadow w-full mb-4">
-            <div class="stat p-3">
-              <div class="stat-title text-xs">Performance</div>
-              <div class="stat-value text-base">
-                {if @strategy.performance_score,
-                  do: Float.round(@strategy.performance_score, 2),
-                  else: "—"}
-              </div>
+        <div class="stats stats-horizontal shadow w-full mb-4">
+          <div class="stat p-3">
+            <div class="stat-title text-xs">Performance</div>
+            <div class="stat-value text-base">
+              {if @strategy.performance_score,
+                do: Float.round(@strategy.performance_score, 2),
+                else: "—"}
             </div>
           </div>
+        </div>
 
-          <div class="flex gap-2 flex-wrap">
-            <button class="btn btn-sm btn-ghost">
-              <.icon name="hero-eye" class="size-4" /> Szczegóły
-            </button>
-            <button
-              id={"delete-strategy-#{@strategy.id}"}
-              type="button"
-              phx-click="delete_strategy"
-              phx-click.stop
-              phx-value-id={@strategy.id}
-              phx-hook="ConfirmDelete"
-              class="btn btn-sm btn-error"
-            >
-              <.icon name="hero-trash" class="size-4" /> Usuń
-            </button>
-          </div>
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-ghost">
+            <.icon name="hero-eye" class="size-4" /> Szczegóły
+          </button>
+          <button
+            id={"delete-strategy-#{@strategy.id}"}
+            type="button"
+            phx-click="delete_strategy"
+            phx-click.stop
+            phx-value-id={@strategy.id}
+            phx-hook="ConfirmDelete"
+            class="btn btn-sm btn-error"
+          >
+            <.icon name="hero-trash" class="size-4" /> Usuń
+          </button>
         </div>
       </div>
     </.card>
@@ -418,7 +398,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       <h1 class="text-4xl font-bold">Symulacje</h1>
 
       <%!-- Start Simulation Form --%>
-      <.card class="bg-base-200">
+      <.card class="bg-base-200" title_class="justify-center">
         <:title>Uruchom nową symulację</:title>
 
         <%= if @strategies == [] do %>
@@ -475,8 +455,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   defp simulation_form(assigns) do
     ~H"""
     <form phx-submit="start_simulation" class="space-y-4">
-      <div class="form-control">
-        <label class="label">
+      <div class="form-control mt-6">
+        <label class="label mb-3">
           <span class="label-text">Wybierz strategię</span>
         </label>
         <select
@@ -494,7 +474,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       </div>
 
       <div class="form-control">
-        <label class="label">
+        <label class="label mb-3">
           <span class="label-text">Target draw (losowanie docelowe)</span>
         </label>
         <select
@@ -572,45 +552,47 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
         </div>
       <% end %>
 
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+          <label class="label mb-3">
+            <span class="label-text">Maksymalna liczba prób</span>
+          </label>
+          <input
+            type="number"
+            name="max_attempts"
+            class="input input-bordered"
+            placeholder="999999999"
+            min="1000"
+            max="999999999"
+          />
+          <label class="label">
+            <span class="label-text-alt text-sm font-normal">Domyślnie: 999,999,999</span>
+          </label>
+        </div>
+
+        <div class="form-control">
+          <label class="label mb-3">
+            <span class="label-text">Timeout (sekundy)</span>
+          </label>
+          <input
+            type="number"
+            name="timeout_seconds"
+            class="input input-bordered"
+            placeholder="86400"
+            min="10"
+            max="86400"
+          />
+          <label class="label">
+            <span class="label-text-alt text-sm font-normal">Domyślnie: 86400s (24 godziny)</span>
+          </label>
+        </div>
+      </div>
+
       <details class="collapse collapse-arrow bg-base-100">
         <summary class="collapse-title font-medium">
-          Opcjonalne limity (zaawansowane)
+          Opcje zaawansowane
         </summary>
         <div class="collapse-content space-y-4">
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Maksymalna liczba prób</span>
-            </label>
-            <input
-              type="number"
-              name="max_attempts"
-              class="input input-bordered"
-              placeholder="999999999"
-              min="1000"
-              max="999999999"
-            />
-            <label class="label">
-              <span class="label-text-alt">Domyślnie: 999,999,999</span>
-            </label>
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Timeout (sekundy)</span>
-            </label>
-            <input
-              type="number"
-              name="timeout_seconds"
-              class="input input-bordered"
-              placeholder="86400"
-              min="10"
-              max="86400"
-            />
-            <label class="label">
-              <span class="label-text-alt">Domyślnie: 86400s (24 godziny)</span>
-            </label>
-          </div>
-
           <div class="form-control">
             <label class="label cursor-pointer">
               <input
@@ -779,7 +761,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                     />
                     {if sim.is_favorite, do: "Oznaczona", else: "Oznacz"}
                   </button>
-                  <%= if sim.status in ["error", "timeout", "max_attempts_reached", "success", "cancelled"] do %>
+                  <%= if sim.status in ["error", "timeout", "max_attempts_reached", "success", "cancelled", "running"] do %>
                     <button
                       phx-click="retry_simulation"
                       phx-value-id={sim.id}
@@ -1022,7 +1004,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     <div class="card bg-base-200">
       <div class="card-body">
         <h2 class="card-title">Top 3 Strategie</h2>
-        <div class="grid md:grid-cols-3 gap-4 mt-4">
+        <div class="grid md:grid-cols-3 gap-4 mt-6">
           <%= for {strategy, index} <- Enum.with_index(@strategies, 1) do %>
             <div class="card bg-base-100">
               <div class="card-body">
@@ -1048,35 +1030,43 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
   defp generator_form(assigns) do
     ~H"""
-    <div class="card bg-base-100 shadow-xl">
+    <form phx-submit="generate_coupons" class="card bg-base-100 shadow-xl">
       <div class="card-body">
         <h2 class="card-title">Generuj propozycje</h2>
-        <div class="form-control">
-          <label class="label">
+        <div class="form-control mt-6">
+          <label class="label mb-3">
             <span class="label-text">Wybierz strategię</span>
           </label>
-          <select class="select select-bordered">
+          <select name="strategy_id" class="select select-bordered" required>
+            <option value="" disabled selected>Wybierz strategię...</option>
             <%= for strategy <- @strategies do %>
               <option value={strategy.id}>{strategy.name}</option>
             <% end %>
           </select>
         </div>
         <div class="form-control">
-          <label class="label">
+          <label class="label mb-3">
             <span class="label-text">Liczba kuponów (1-10)</span>
           </label>
-          <input type="range" min="1" max="10" value="3" class="range range-primary" />
+          <input
+            type="range"
+            name="coupons_count"
+            min="1"
+            max="10"
+            value="3"
+            class="range range-primary"
+          />
           <div class="flex justify-between text-xs mt-2">
             <span>1</span>
             <span>5</span>
             <span>10</span>
           </div>
         </div>
-        <button class="btn btn-primary mt-4">
+        <button type="submit" class="btn btn-primary mt-4">
           <.icon name="hero-sparkles" class="size-5" /> Generuj propozycje
         </button>
       </div>
-    </div>
+    </form>
     """
   end
 
@@ -1087,12 +1077,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     <div class="space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-2xl font-bold">Wygenerowane kupony</h2>
-        <button class="btn btn-secondary">
+        <button type="button" phx-click="regenerate_coupons" class="btn btn-secondary">
           <.icon name="hero-arrow-path" class="size-5" /> Wylosuj inne
         </button>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
+      <div class="grid md:grid-cols-2 gap-4 mt-6">
         <%= for {coupon, index} <- Enum.with_index(@coupons, 1) do %>
           <.card>
             <:title>Kupon {index}</:title>

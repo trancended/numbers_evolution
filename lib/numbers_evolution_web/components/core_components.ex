@@ -811,6 +811,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   """
   attr(:class, :string, default: nil)
   attr(:compact, :boolean, default: false)
+  attr(:title_class, :string, default: nil)
 
   slot(:title)
   slot(:inner_block, required: true)
@@ -820,7 +821,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
     ~H"""
     <div class={["card bg-base-100 shadow-xl", @class]}>
       <div class={["card-body", @compact && "p-4"]}>
-        <h2 :if={@title != []} class="card-title">
+        <h2 :if={@title != []} class={["card-title", @title_class]}>
           {render_slot(@title)}
         </h2>
         {render_slot(@inner_block)}
