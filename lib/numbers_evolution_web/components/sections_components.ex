@@ -1072,16 +1072,48 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             <label class="label mb-3">
               <span class="label-text">Liczba kuponów (1-10)</span>
             </label>
-            <input
-              type="range"
-              name="coupons_count"
-              min="1"
-              max="10"
-              value="3"
-              class="range range-primary"
-            />
-            <div class="flex justify-between text-xs mt-2">
+            <div class="w-full px-2">
+              <input
+                type="range"
+                name="coupons_count"
+                id="coupons_count_slider"
+                list="coupons_tickmarks"
+                min="1"
+                max="10"
+                value="5"
+                step="1"
+                class="range range-primary range-xs"
+                style="width: 100%;"
+                oninput="document.getElementById('coupons_count_display').textContent = this.value"
+              />
+              <datalist id="coupons_tickmarks">
+                <option value="1"></option>
+                <option value="2"></option>
+                <option value="3"></option>
+                <option value="4"></option>
+                <option value="5"></option>
+                <option value="6"></option>
+                <option value="7"></option>
+                <option value="8"></option>
+                <option value="9"></option>
+                <option value="10"></option>
+              </datalist>
+              <div class="flex w-full justify-between text-xs mt-1">
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+                <span>|</span>
+              </div>
+            </div>
+            <div class="flex justify-between text-xs mt-2 px-2">
               <span>1</span>
+              <span id="coupons_count_display" class="font-bold text-lg text-primary">5</span>
               <span>10</span>
             </div>
           </div>
@@ -1113,19 +1145,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             <div class="space-y-4">
               <div>
                 <p class="text-sm font-semibold mb-2">Główne liczby:</p>
-                <div class="flex gap-2 flex-wrap">
-                  <%= for num <- coupon.main_numbers do %>
-                    <.ball number={num} type="main" size="md" />
-                  <% end %>
-                </div>
+                <.number_ball numbers={coupon.main_numbers} type="main" size="md" />
               </div>
               <div>
                 <p class="text-sm font-semibold mb-2">Euro liczby:</p>
-                <div class="flex gap-2">
-                  <%= for num <- coupon.euro_numbers do %>
-                    <.ball number={num} type="euro" size="md" />
-                  <% end %>
-                </div>
+                <.number_ball numbers={coupon.euro_numbers} type="euro" size="md" />
               </div>
             </div>
           </.card>
