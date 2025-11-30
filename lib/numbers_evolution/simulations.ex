@@ -7,52 +7,9 @@ defmodule NumbersEvolution.Simulations do
 
   import Ecto.Query, warn: false
   alias NumbersEvolution.Accounts.User
-  alias NumbersEvolution.{Draws, Strategies}
+  alias NumbersEvolution.{AtomicCounter, Draws, Strategies}
   alias NumbersEvolution.Repo
   alias NumbersEvolution.Simulations.{Simulation, SimulationDuplicateController}
-
-  defmodule AtomicCounter do
-    @moduledoc """
-    ETS-based atomic counter for high-performance concurrent updates.
-    Much faster than GenServer-based counter as it avoids message passing overhead.
-    """
-
-    @doc """
-    Creates a new ETS table for atomic counter operations.
-    Returns the table reference.
-    """
-    def new(initial_value \\ 0) do
-      table_name = :"atomic_counter_#{:erlang.unique_integer([:positive])}"
-      :ets.new(table_name, [:set, :public, :named_table])
-      :ets.insert(table_name, {:count, initial_value})
-      table_name
-    end
-
-    @doc """
-    Atomically increments the counter and returns the new value.
-    This is thread-safe and much faster than GenServer.call.
-    """
-    def increment(table_name) do
-      :ets.update_counter(table_name, :count, 1)
-    end
-
-    @doc """
-    Gets the current counter value.
-    """
-    def get(table_name) do
-      case :ets.lookup(table_name, :count) do
-        [{:count, value}] -> value
-        [] -> 0
-      end
-    end
-
-    @doc """
-    Deletes the ETS table to free memory.
-    """
-    def delete(table_name) do
-      :ets.delete(table_name)
-    end
-  end
 
   defmodule PrizeTiersTracker do
     @moduledoc """
@@ -84,33 +41,33 @@ defmodule NumbersEvolution.Simulations do
       :ets.update_counter(table_name, tier, 1)
     end
 
-    def increment_tier(table_name, tier, generated, target) when tier in 1..12 and tier in 1..5 do
+    def increment_tier(table_name, tier, generated, target) when tier in 1..12 do
       :ets.update_counter(table_name, tier, 1)
 
       # Store details for high prize tiers (1-5)
-      details_key = :"#{tier}_details"
+      if tier in 1..5 do
+        details_key = :"#{tier}_details"
 
-      current_details =
-        case :ets.lookup(table_name, details_key) do
-          [{^details_key, details}] -> details
-          [] -> []
-        end
+        current_details =
+          case :ets.lookup(table_name, details_key) do
+            [{^details_key, details}] -> details
+            [] -> []
+          end
 
-      # Calculate matched numbers
-      matched_main = count_matches_local(generated.main, target.main_numbers)
-      matched_euro = count_matches_local(generated.euro, target.euro_numbers)
+        # Calculate matched numbers
+        matched_main = count_matches_local(generated.main, target.main_numbers)
+        matched_euro = count_matches_local(generated.euro, target.euro_numbers)
 
-      new_detail = %{
-        main_matched: matched_main,
-        euro_matched: matched_euro,
-        main_numbers: generated.main,
-        euro_numbers: generated.euro
-      }
+        new_detail = %{
+          main_matched: matched_main,
+          euro_matched: matched_euro,
+          main_numbers: generated.main,
+          euro_numbers: generated.euro
+        }
 
-      :ets.insert(table_name, {details_key, [new_detail | current_details]})
+        :ets.insert(table_name, {details_key, [new_detail | current_details]})
+      end
     end
-
-    def increment_tier(_table_name, _tier, _generated, _target), do: :ok
 
     @doc """
     Gets all prize tiers as a map.

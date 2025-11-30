@@ -736,11 +736,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                     <%= if Map.has_key?(@live_prize_tiers, sim_id_string) do %>
                       <% prize_tiers = Map.get(@live_prize_tiers, sim_id_string) %>
                       <div class="flex flex-wrap gap-1">
-                        <%= for {tier, count} <- prize_tiers
-                              |> Enum.filter(fn {k, _v} -> is_integer(k) end)
-                              |> Enum.filter(fn {_tier, count} -> count > 0 end)
-                              |> Enum.sort_by(&elem(&1, 0)) do %>
-                          <div class="badge badge-warning badge-sm animate-pulse">
+                        <%= for tier <- 1..12 do %>
+                          <% count = Map.get(prize_tiers, tier, 0) %>
+                          <div class={[
+                            "badge badge-sm",
+                            if(count > 0, do: "badge-warning animate-pulse", else: "badge-ghost")
+                          ]}>
                             {tier}° {format_prize_description(tier)}: {count}
                           </div>
                         <% end %>
@@ -750,11 +751,12 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                     <% end %>
                   <% sim.status in ["success", "max_attempts_reached", "timeout"] && sim.result && sim.result.prize_tiers -> %>
                     <div class="flex flex-wrap gap-1">
-                      <%= for {tier, count} <- sim.result.prize_tiers
-                              |> Enum.filter(fn {k, _v} -> is_integer(k) end)
-                              |> Enum.sort_by(&elem(&1, 0))
-                              |> Enum.filter(fn {_tier, count} -> count > 0 end) do %>
-                        <div class="badge badge-primary badge-sm">
+                      <%= for tier <- 1..12 do %>
+                        <% count = Map.get(sim.result.prize_tiers, tier, 0) %>
+                        <div class={[
+                          "badge badge-sm",
+                          if(count > 0, do: "badge-primary", else: "badge-ghost")
+                        ]}>
                           {tier}° {format_prize_description(tier)}: {count}
                         </div>
                       <% end %>
