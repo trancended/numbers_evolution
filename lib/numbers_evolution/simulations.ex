@@ -11,6 +11,49 @@ defmodule NumbersEvolution.Simulations do
   alias NumbersEvolution.Repo
   alias NumbersEvolution.Simulations.{Simulation, SimulationDuplicateController}
 
+  defmodule AtomicCounter do
+    @moduledoc """
+    ETS-based atomic counter for high-performance concurrent updates.
+    Much faster than GenServer-based counter as it avoids message passing overhead.
+    """
+
+    @doc """
+    Creates a new ETS table for atomic counter operations.
+    Returns the table reference.
+    """
+    def new(initial_value \\ 0) do
+      table_name = :"atomic_counter_#{:erlang.unique_integer([:positive])}"
+      :ets.new(table_name, [:set, :public, :named_table])
+      :ets.insert(table_name, {:count, initial_value})
+      table_name
+    end
+
+    @doc """
+    Atomically increments the counter and returns the new value.
+    This is thread-safe and much faster than GenServer.call.
+    """
+    def increment(table_name) do
+      :ets.update_counter(table_name, :count, 1)
+    end
+
+    @doc """
+    Gets the current counter value.
+    """
+    def get(table_name) do
+      case :ets.lookup(table_name, :count) do
+        [{:count, value}] -> value
+        [] -> 0
+      end
+    end
+
+    @doc """
+    Deletes the ETS table to free memory.
+    """
+    def delete(table_name) do
+      :ets.delete(table_name)
+    end
+  end
+
   defmodule SimulationContext do
     @moduledoc """
     Context struct for simulation execution parameters.
@@ -25,7 +68,9 @@ defmodule NumbersEvolution.Simulations do
       :duplicate_controller,
       :current_attempt,
       :simulation_id,
-      :half_random_mode
+      :half_random_mode,
+      :thread_count,
+      :counter_table
     ]
   end
 
@@ -564,11 +609,13 @@ defmodule NumbersEvolution.Simulations do
     max_attempts = parse_int(attrs["max_attempts"], 1_000_000)
     timeout_seconds = parse_int(attrs["timeout_seconds"], 86_400)
     half_random_mode = parse_boolean(attrs["half_random_mode"], false)
+    thread_count = parse_int(attrs["thread_count"], 10)
 
     %{
       "max_attempts" => max_attempts,
       "timeout_seconds" => timeout_seconds,
-      "half_random_mode" => half_random_mode
+      "half_random_mode" => half_random_mode,
+      "thread_count" => thread_count
     }
   end
 
@@ -676,8 +723,12 @@ defmodule NumbersEvolution.Simulations do
       # Inicjalizuj kontroler duplikatów
       duplicate_controller = SimulationDuplicateController.new()
 
+      # Inicjalizuj atomiczny licznik ETS (znacznie szybszy niż GenServer)
+      counter_table = AtomicCounter.new(0)
+
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
+      thread_count = Map.get(options, "thread_count", 48)
 
       context = %SimulationContext{
         strategy: strategy,
@@ -688,7 +739,9 @@ defmodule NumbersEvolution.Simulations do
         duplicate_controller: duplicate_controller,
         current_attempt: 0,
         simulation_id: simulation_id,
-        half_random_mode: half_random_mode
+        half_random_mode: half_random_mode,
+        thread_count: thread_count,
+        counter_table: counter_table
       }
 
       result = simulate_until_match(context)
@@ -721,18 +774,96 @@ defmodule NumbersEvolution.Simulations do
   end
 
   defp simulate_until_match(%SimulationContext{} = context) do
-    # Check limits first
+    # Check limits first - use atomic counter for attempt count
+    current_count = AtomicCounter.get(context.counter_table)
+
     case check_simulation_limits(
-           context.current_attempt,
+           current_count,
            context.max_attempts,
            context.start_time,
            context.timeout_seconds
          ) do
       {:continue, _} ->
-        process_simulation_attempt(context)
+        process_simulation_attempts_parallel(context)
 
       {:timeout, reason} ->
-        {:timeout, reason, context.current_attempt, context.duplicate_controller}
+        {:timeout, reason, current_count, context.duplicate_controller}
+    end
+  end
+
+  defp process_simulation_attempts_parallel(%SimulationContext{} = context) do
+    # Uruchom wiele wątków równolegle do generowania prób
+    tasks =
+      Enum.map(1..context.thread_count, fn _thread_id ->
+        Task.async(fn ->
+          generate_and_check_attempt(context)
+        end)
+      end)
+
+    # Poczekaj na pierwsze zakończenie zadania (pierwsze które znajdzie dopasowanie lub przetworzy próbę)
+    case Task.yield_many(tasks, 5000) do
+      [{_task, {:match_found, generated, updated_controller}} | _rest] ->
+        # Znaleziono dopasowanie - anuluj pozostałe zadania
+        Enum.each(tasks, &Task.shutdown/1)
+        {:success, AtomicCounter.get(context.counter_table), generated, updated_controller}
+
+      [] ->
+        # Brak zakończonych zadań w czasie - spróbuj ponownie
+        process_simulation_attempts_parallel(context)
+
+      _results ->
+        # Wszystkie zadania zakończone ale bez dopasowania - kontynuuj
+        simulate_until_match(context)
+    end
+  end
+
+  defp generate_and_check_attempt(context) do
+    case Strategies.Generator.generate_numbers(context.strategy,
+           half_random_mode: context.half_random_mode
+         ) do
+      {:ok, generated} ->
+        handle_generated_numbers(context, generated)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp handle_generated_numbers(context, generated) do
+    case SimulationDuplicateController.check_attempt(context.duplicate_controller, generated) do
+      {:duplicate, updated_controller} ->
+        handle_duplicate_attempt(context, updated_controller)
+
+      {:unique, updated_controller} ->
+        handle_unique_attempt(context, generated, updated_controller)
+    end
+  end
+
+  defp handle_duplicate_attempt(context, updated_controller) do
+    # Duplikat - zwiększ licznik atomicznie (bez kolejki!)
+    new_count = AtomicCounter.increment(context.counter_table)
+    # Broadcastuj tylko co 100 prób dla wydajności
+    maybe_broadcast_progress(new_count, context.simulation_id, context.start_time)
+
+    {:duplicate, updated_controller}
+  end
+
+  defp handle_unique_attempt(context, generated, updated_controller) do
+    # Unikalna próba - zwiększ licznik atomicznie
+    new_count = AtomicCounter.increment(context.counter_table)
+    # Broadcastuj tylko co 100 prób dla wydajności
+    maybe_broadcast_progress(new_count, context.simulation_id, context.start_time)
+
+    if matches_target?(generated, context.target_numbers) do
+      {:match_found, generated, updated_controller}
+    else
+      {:unique_no_match, updated_controller}
+    end
+  end
+
+  defp maybe_broadcast_progress(count, simulation_id, start_time) do
+    if rem(count, 100) == 0 do
+      broadcast_progress(simulation_id, count, start_time)
     end
   end
 
@@ -746,47 +877,6 @@ defmodule NumbersEvolution.Simulations do
 
       true ->
         {:continue, nil}
-    end
-  end
-
-  defp process_simulation_attempt(%SimulationContext{} = context) do
-    case Strategies.Generator.generate_numbers(context.strategy,
-           half_random_mode: context.half_random_mode
-         ) do
-      {:ok, generated} ->
-        handle_generated_numbers(generated, context)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp handle_generated_numbers(generated, %SimulationContext{} = context) do
-    case SimulationDuplicateController.check_attempt(context.duplicate_controller, generated) do
-      {:duplicate, updated_controller} ->
-        # Skip duplicate - recursive call without incrementing attempt counter
-        updated_context = %{context | duplicate_controller: updated_controller}
-        simulate_until_match(updated_context)
-
-      {:unique, updated_controller} ->
-        updated_context = %{context | duplicate_controller: updated_controller}
-        handle_unique_attempt(generated, updated_context)
-    end
-  end
-
-  defp handle_unique_attempt(generated, %SimulationContext{} = context) do
-    if matches_target?(generated, context.target_numbers) do
-      {:success, context.current_attempt + 1, generated, context.duplicate_controller}
-    else
-      # Broadcast progress every 1000 attempts for more frequent updates
-      # Also broadcast at the start (current_attempt == 0)
-      if rem(context.current_attempt, 1_000) == 0 || context.current_attempt == 0 do
-        broadcast_progress(context.simulation_id, context.current_attempt, context.start_time)
-      end
-
-      # Continue simulation
-      updated_context = %{context | current_attempt: context.current_attempt + 1}
-      simulate_until_match(updated_context)
     end
   end
 

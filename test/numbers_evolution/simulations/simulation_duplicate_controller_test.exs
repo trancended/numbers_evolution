@@ -7,7 +7,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
     test "creates a new duplicate controller with empty state" do
       controller = SimulationDuplicateController.new()
 
-      assert controller.attempts_set == MapSet.new()
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 0
       assert controller.duplicates_count == 0
     end
   end
@@ -20,7 +21,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
       assert {:unique, updated_controller} =
                SimulationDuplicateController.check_attempt(controller, attempt)
 
-      assert MapSet.size(updated_controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
+      assert stats.unique_attempts == 1
       assert updated_controller.duplicates_count == 0
     end
 
@@ -35,7 +37,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
       assert {:duplicate, updated_controller} =
                SimulationDuplicateController.check_attempt(controller, attempt)
 
-      assert MapSet.size(updated_controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
+      assert stats.unique_attempts == 1
       assert updated_controller.duplicates_count == 1
     end
 
@@ -52,7 +55,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
       assert {:duplicate, updated_controller} =
                SimulationDuplicateController.check_attempt(controller, attempt2)
 
-      assert MapSet.size(updated_controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
+      assert stats.unique_attempts == 1
       assert updated_controller.duplicates_count == 1
     end
 
@@ -68,7 +72,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
       assert {:unique, updated_controller} =
                SimulationDuplicateController.check_attempt(controller, attempt2)
 
-      assert MapSet.size(updated_controller.attempts_set) == 2
+      stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
+      assert stats.unique_attempts == 2
       assert updated_controller.duplicates_count == 0
     end
 
@@ -95,7 +100,8 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
       {:unique, updated_controller} =
         SimulationDuplicateController.check_attempt(controller, attempt4)
 
-      assert MapSet.size(updated_controller.attempts_set) == 2
+      stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
+      assert stats.unique_attempts == 2
       assert updated_controller.duplicates_count == 2
     end
   end

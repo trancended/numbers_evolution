@@ -236,19 +236,22 @@ defmodule NumbersEvolution.SimulationsLogicTest do
       attempt1 = %{main: [1, 2, 3, 4, 5], euro: [1, 2]}
       {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt1)
       assert controller.duplicates_count == 0
-      assert MapSet.size(controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 1
 
       # Second attempt - same numbers, different order - duplicate
       attempt2 = %{main: [5, 1, 3, 2, 4], euro: [2, 1]}
       {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, attempt2)
       assert controller.duplicates_count == 1
-      assert MapSet.size(controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 1
 
       # Third attempt - different numbers - unique
       attempt3 = %{main: [6, 7, 8, 9, 10], euro: [3, 4]}
       {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt3)
       assert controller.duplicates_count == 1
-      assert MapSet.size(controller.attempts_set) == 2
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 2
     end
 
     test "duplicate controller handles empty attempts gracefully" do
@@ -258,12 +261,14 @@ defmodule NumbersEvolution.SimulationsLogicTest do
       attempt = %{main: [], euro: []}
       {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
       assert controller.duplicates_count == 0
-      assert MapSet.size(controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 1
 
       # Same empty attempt again - duplicate
       {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
       assert controller.duplicates_count == 1
-      assert MapSet.size(controller.attempts_set) == 1
+      stats = SimulationDuplicateController.get_detailed_stats(controller)
+      assert stats.unique_attempts == 1
     end
   end
 

@@ -2,14 +2,14 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
   @moduledoc """
   Kontroler zapobiegający duplikatom prób w pojedynczej symulacji.
 
-  Używa MapSet do efektywnego sprawdzania unikalności kombinacji.
-  Każda symulacja ma własny kontroler duplikatów, co zapewnia izolację między symulacjami.
+  Używa ETS do efektywnego sprawdzania unikalności kombinacji.
+  Każda symulacja ma własną tabelę ETS, co zapewnia izolację między symulacjami.
   """
 
-  defstruct [:attempts_set, :duplicates_count]
+  defstruct [:table_name, :duplicates_count]
 
   @type t :: %__MODULE__{
-          attempts_set: MapSet.t(),
+          table_name: atom(),
           duplicates_count: non_neg_integer()
         }
 
@@ -18,8 +18,14 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
   """
   @spec new() :: t()
   def new do
+    # Utwórz unikalną nazwę tabeli ETS dla tej symulacji
+    table_name = :"duplicate_check_#{:erlang.unique_integer([:positive])}"
+
+    # Utwórz tabelę ETS typu set (bez duplikatów)
+    :ets.new(table_name, [:set, :public, :named_table])
+
     %__MODULE__{
-      attempts_set: MapSet.new(),
+      table_name: table_name,
       duplicates_count: 0
     }
   end
@@ -44,20 +50,20 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
     # Generuj hash kombinacji dla efektywnego porównania
     combination_hash = generate_combination_hash(main, euro)
 
-    if MapSet.member?(controller.attempts_set, combination_hash) do
-      # Duplikat - zwiększamy licznik i zwracamy :duplicate
-      {:duplicate,
-       %__MODULE__{
-         controller
-         | duplicates_count: controller.duplicates_count + 1
-       }}
-    else
-      # Unikalna próba - dodajemy do zbioru
-      {:unique,
-       %__MODULE__{
-         controller
-         | attempts_set: MapSet.put(controller.attempts_set, combination_hash)
-       }}
+    # Sprawdź czy hash już istnieje w tabeli ETS
+    case :ets.lookup(controller.table_name, combination_hash) do
+      [] ->
+        # Unikalna próba - dodajemy do tabeli ETS
+        :ets.insert(controller.table_name, {combination_hash, true})
+        {:unique, controller}
+
+      [_] ->
+        # Duplikat - zwiększamy licznik
+        {:duplicate,
+         %__MODULE__{
+           controller
+           | duplicates_count: controller.duplicates_count + 1
+         }}
     end
   end
 
@@ -111,16 +117,15 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
 
   ## Examples
 
-      iex> controller = %SimulationDuplicateController{
-      ...>   attempts_set: MapSet.new(["hash1", "hash2"]),
-      ...>   duplicates_count: 3
-      ...> }
+      iex> controller = SimulationDuplicateController.new()
+      iex> {:unique, controller} = SimulationDuplicateController.check_attempt(controller, %{main: [1,2,3,4,5], euro: [1,2]})
+      iex> {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, %{main: [1,2,3,4,5], euro: [1,2]})
       iex> SimulationDuplicateController.get_detailed_stats(controller)
       %{
-        duplicates_skipped: 3,
-        unique_attempts: 2,
-        total_attempts: 5,
-        duplicate_ratio: 1.5
+        duplicates_skipped: 1,
+        unique_attempts: 1,
+        total_attempts: 2,
+        duplicate_ratio: 1.0
       }
 
   """
@@ -131,10 +136,10 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
           duplicate_ratio: float()
         }
   def get_detailed_stats(%__MODULE__{
-        attempts_set: attempts_set,
+        table_name: table_name,
         duplicates_count: duplicates_count
       }) do
-    unique_attempts = MapSet.size(attempts_set)
+    unique_attempts = :ets.info(table_name, :size)
     total_attempts = unique_attempts + duplicates_count
     duplicate_ratio = if unique_attempts > 0, do: duplicates_count / unique_attempts, else: 0.0
 

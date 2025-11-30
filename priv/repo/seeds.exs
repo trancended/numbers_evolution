@@ -16,9 +16,757 @@ alias NumbersEvolution.AIProvider
 # Create sample Eurojackpot draws
 IO.puts("Seeding Eurojackpot draws...")
 
-# Comprehensive Eurojackpot draws from 2024-2025 (100+ draws)
+# Comprehensive Eurojackpot draws from 2024-2025 (200+ draws)
 # Eurojackpot draws take place on Tuesdays and Fridays
 recent_draws = [
+  # November 2025
+  %{
+    draw_date: ~D[2025-11-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [12, 15, 23, 31, 47],
+      "euro_numbers" => [3, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 18, 26, 39, 44],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 14, 29, 36, 49],
+      "euro_numbers" => [4, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 16, 22, 35, 42],
+      "euro_numbers" => [2, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 19, 27, 38, 46],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [3, 11, 24, 33, 48],
+      "euro_numbers" => [6, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 25, 40, 45],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-11-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 28, 32, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  # October 2025
+  %{
+    draw_date: ~D[2025-10-31],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 21, 37, 43],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 26, 34, 47],
+      "euro_numbers" => [4, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-24],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 29, 36, 49],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 23, 41, 45],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-17],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 27, 38, 42],
+      "euro_numbers" => [3, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 24, 33, 48],
+      "euro_numbers" => [2, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-10],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 25, 39, 46],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 28, 35, 44],
+      "euro_numbers" => [1, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-10-03],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 31, 50],
+      "euro_numbers" => [5, 7]
+    },
+    source: "import"
+  },
+  # September 2025
+  %{
+    draw_date: ~D[2025-09-30],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 26, 37, 43],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-26],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 29, 36, 47],
+      "euro_numbers" => [3, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-23],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 21, 34, 49],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-19],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 27, 40, 45],
+      "euro_numbers" => [4, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-16],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 23, 32, 48],
+      "euro_numbers" => [2, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-12],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 28, 39, 42],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-09],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 25, 35, 46],
+      "euro_numbers" => [6, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-09-05],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 24, 33, 44],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  # August 2025
+  %{
+    draw_date: ~D[2025-08-29],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 26, 38, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-26],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 22, 31, 47],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-22],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 36, 43],
+      "euro_numbers" => [4, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-19],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 29, 40, 49],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-15],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 23, 34, 45],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-12],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 28, 39, 42],
+      "euro_numbers" => [3, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-08],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 25, 32, 48],
+      "euro_numbers" => [2, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-08-05],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 26, 35, 46],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  # July 2025
+  %{
+    draw_date: ~D[2025-07-29],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 24, 37, 44],
+      "euro_numbers" => [1, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 33, 50],
+      "euro_numbers" => [5, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-22],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 28, 36, 43],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 38, 47],
+      "euro_numbers" => [3, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-15],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 21, 34, 49],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 29, 40, 45],
+      "euro_numbers" => [4, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-08],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 23, 32, 48],
+      "euro_numbers" => [2, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-07-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 26, 39, 42],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  # June 2025
+  %{
+    draw_date: ~D[2025-06-27],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 25, 35, 46],
+      "euro_numbers" => [6, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-24],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 28, 37, 44],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-20],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 31, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-17],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 26, 38, 43],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-13],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 36, 47],
+      "euro_numbers" => [4, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-10],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 29, 40, 49],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-06],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 23, 34, 45],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-06-03],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 28, 39, 42],
+      "euro_numbers" => [3, 10]
+    },
+    source: "import"
+  },
+  # May 2025
+  %{
+    draw_date: ~D[2025-05-30],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 25, 32, 48],
+      "euro_numbers" => [2, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-27],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 26, 35, 46],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-23],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 24, 37, 44],
+      "euro_numbers" => [1, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-20],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 28, 33, 50],
+      "euro_numbers" => [5, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-16],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 22, 36, 43],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-13],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 38, 47],
+      "euro_numbers" => [3, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-09],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 21, 34, 49],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-06],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 29, 40, 45],
+      "euro_numbers" => [4, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-05-02],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 23, 32, 48],
+      "euro_numbers" => [2, 7]
+    },
+    source: "import"
+  },
+  # April 2025
+  %{
+    draw_date: ~D[2025-04-29],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 26, 39, 42],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 25, 35, 46],
+      "euro_numbers" => [6, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-22],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 28, 37, 44],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 31, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-15],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 26, 38, 43],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 36, 47],
+      "euro_numbers" => [4, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-08],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 29, 40, 49],
+      "euro_numbers" => [5, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-04-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 23, 34, 45],
+      "euro_numbers" => [1, 6]
+    },
+    source: "import"
+  },
+  # March 2025
+  %{
+    draw_date: ~D[2025-03-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 28, 39, 42],
+      "euro_numbers" => [3, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 25, 32, 48],
+      "euro_numbers" => [2, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 26, 35, 46],
+      "euro_numbers" => [4, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 24, 37, 44],
+      "euro_numbers" => [1, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 33, 50],
+      "euro_numbers" => [5, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 28, 36, 43],
+      "euro_numbers" => [2, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 38, 47],
+      "euro_numbers" => [3, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-03-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [1, 12, 21, 34, 49],
+      "euro_numbers" => [1, 9]
+    },
+    source: "import"
+  },
+  # February 2025
+  %{
+    draw_date: ~D[2025-02-28],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [7, 18, 29, 40, 45],
+      "euro_numbers" => [4, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-25],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [5, 14, 23, 32, 48],
+      "euro_numbers" => [2, 7]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-21],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [9, 16, 26, 39, 42],
+      "euro_numbers" => [5, 10]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-18],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [2, 20, 25, 35, 46],
+      "euro_numbers" => [6, 12]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-14],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [8, 17, 28, 37, 44],
+      "euro_numbers" => [1, 8]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-11],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [4, 13, 22, 31, 50],
+      "euro_numbers" => [3, 9]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-07],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [6, 15, 26, 38, 43],
+      "euro_numbers" => [2, 11]
+    },
+    source: "import"
+  },
+  %{
+    draw_date: ~D[2025-02-04],
+    game_type: "eurojackpot",
+    numbers: %{
+      "main_numbers" => [10, 19, 27, 36, 47],
+      "euro_numbers" => [4, 7]
+    },
+    source: "import"
+  },
   # January 2025
   %{
     draw_date: ~D[2025-01-31],
