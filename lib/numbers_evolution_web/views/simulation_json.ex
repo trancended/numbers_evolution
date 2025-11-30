@@ -76,6 +76,7 @@ defmodule NumbersEvolutionWeb.SimulationJSON do
     |> add_failure_info(result)
     |> add_error_info(result)
     |> add_final_draw(result)
+    |> add_prize_tiers(result)
   end
 
   defp add_matched_numbers(base, %{matched_main: _} = result) do
@@ -109,6 +110,12 @@ defmodule NumbersEvolutionWeb.SimulationJSON do
   end
 
   defp add_final_draw(base, _), do: base
+
+  defp add_prize_tiers(base, %{prize_tiers: prize_tiers}) when is_map(prize_tiers) do
+    Map.put(base, :prize_tiers, prize_tiers)
+  end
+
+  defp add_prize_tiers(base, _), do: base
 
   defp render_strategy_summary(strategy) do
     %{

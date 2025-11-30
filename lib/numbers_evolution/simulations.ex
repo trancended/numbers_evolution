@@ -54,6 +54,112 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
+  defmodule PrizeTiersTracker do
+    @moduledoc """
+    ETS-based prize tiers tracker for concurrent prize counting.
+    """
+
+    @doc """
+    Creates a new ETS table for prize tiers tracking.
+    Initializes all 12 tiers with 0 count and empty details list.
+    """
+    def new do
+      table_name = :"prize_tiers_#{:erlang.unique_integer([:positive])}"
+      :ets.new(table_name, [:set, :public, :named_table])
+
+      # Initialize all 12 prize tiers with 0 count and empty details
+      Enum.each(1..12, fn tier ->
+        :ets.insert(table_name, {tier, 0})
+        :ets.insert(table_name, {:"#{tier}_details", []})
+      end)
+
+      table_name
+    end
+
+    @doc """
+    Atomically increments the count for a specific prize tier.
+    For high tiers (1-5), also stores the matched numbers details.
+    """
+    def increment_tier(table_name, tier) when tier in 1..12 do
+      :ets.update_counter(table_name, tier, 1)
+    end
+
+    def increment_tier(table_name, tier, generated, target) when tier in 1..12 and tier in 1..5 do
+      :ets.update_counter(table_name, tier, 1)
+
+      # Store details for high prize tiers (1-5)
+      details_key = :"#{tier}_details"
+
+      current_details =
+        case :ets.lookup(table_name, details_key) do
+          [{^details_key, details}] -> details
+          [] -> []
+        end
+
+      # Calculate matched numbers
+      matched_main = count_matches_local(generated.main, target.main_numbers)
+      matched_euro = count_matches_local(generated.euro, target.euro_numbers)
+
+      new_detail = %{
+        main_matched: matched_main,
+        euro_matched: matched_euro,
+        main_numbers: generated.main,
+        euro_numbers: generated.euro
+      }
+
+      :ets.insert(table_name, {details_key, [new_detail | current_details]})
+    end
+
+    def increment_tier(_table_name, _tier, _generated, _target), do: :ok
+
+    @doc """
+    Gets all prize tiers as a map.
+    """
+    def get_all(table_name) do
+      table_name
+      |> :ets.tab2list()
+      |> Enum.into(%{})
+    end
+
+    @doc """
+    Gets prize details for high tiers (1-5) as a map.
+    """
+    def get_details(table_name) do
+      details = %{}
+
+      # Get details for tiers 1-5
+      Enum.reduce(1..5, details, fn tier, acc ->
+        details_key = :"#{tier}_details"
+
+        tier_details =
+          case :ets.lookup(table_name, details_key) do
+            [{^details_key, details_list}] -> details_list
+            [] -> []
+          end
+
+        if tier_details != [] do
+          Map.put(acc, tier, tier_details)
+        else
+          acc
+        end
+      end)
+    end
+
+    @doc """
+    Deletes the ETS table to free memory.
+    """
+    def delete(table_name) do
+      :ets.delete(table_name)
+    end
+
+    # Local implementation of count_matches for PrizeTiersTracker
+    defp count_matches_local(generated_list, target_list) do
+      generated_set = MapSet.new(generated_list)
+      target_set = MapSet.new(target_list)
+      MapSet.intersection(generated_set, target_set) |> MapSet.size()
+    end
+  end
+
   defmodule SimulationContext do
     @moduledoc """
     Context struct for simulation execution parameters.
@@ -70,7 +176,8 @@ defmodule NumbersEvolution.Simulations do
       :simulation_id,
       :half_random_mode,
       :thread_count,
-      :counter_table
+      :counter_table,
+      :prize_tiers_table
     ]
   end
 
@@ -726,6 +833,9 @@ defmodule NumbersEvolution.Simulations do
       # Inicjalizuj atomiczny licznik ETS (znacznie szybszy niż GenServer)
       counter_table = AtomicCounter.new(0)
 
+      # Inicjalizuj tracker nagród
+      prize_tiers_table = PrizeTiersTracker.new()
+
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
       thread_count = Map.get(options, "thread_count", 48)
@@ -741,13 +851,21 @@ defmodule NumbersEvolution.Simulations do
         simulation_id: simulation_id,
         half_random_mode: half_random_mode,
         thread_count: thread_count,
-        counter_table: counter_table
+        counter_table: counter_table,
+        prize_tiers_table: prize_tiers_table
       }
 
       result = simulate_until_match(context)
 
       # Finalize simulation
-      finalize_simulation(simulation_id, result, start_time, strategy, duplicate_controller)
+      finalize_simulation(
+        simulation_id,
+        result,
+        start_time,
+        strategy,
+        duplicate_controller,
+        prize_tiers_table
+      )
     rescue
       e ->
         Logger.error("Simulation #{simulation_id} crashed: #{inspect(e)}")
@@ -843,7 +961,12 @@ defmodule NumbersEvolution.Simulations do
     # Duplikat - zwiększ licznik atomicznie (bez kolejki!)
     new_count = AtomicCounter.increment(context.counter_table)
     # Broadcastuj tylko co 100 prób dla wydajności
-    maybe_broadcast_progress(new_count, context.simulation_id, context.start_time)
+    maybe_broadcast_progress(
+      new_count,
+      context.simulation_id,
+      context.start_time,
+      context.prize_tiers_table
+    )
 
     {:duplicate, updated_controller}
   end
@@ -852,18 +975,38 @@ defmodule NumbersEvolution.Simulations do
     # Unikalna próba - zwiększ licznik atomicznie
     new_count = AtomicCounter.increment(context.counter_table)
     # Broadcastuj tylko co 100 prób dla wydajności
-    maybe_broadcast_progress(new_count, context.simulation_id, context.start_time)
+    maybe_broadcast_progress(
+      new_count,
+      context.simulation_id,
+      context.start_time,
+      context.prize_tiers_table
+    )
 
-    if matches_target?(generated, context.target_numbers) do
+    # Sprawdź wszystkie możliwe stopnie nagród i zlicz je
+    all_tiers = calculate_all_prize_tiers(generated, context.target_numbers)
+
+    # Zlicz wszystkie trafione tier'y
+    Enum.each(all_tiers, fn tier ->
+      PrizeTiersTracker.increment_tier(
+        context.prize_tiers_table,
+        tier,
+        generated,
+        context.target_numbers
+      )
+    end)
+
+    # Sprawdź czy jest jackpot (tier 1)
+    if 1 in all_tiers do
       {:match_found, generated, updated_controller}
     else
       {:unique_no_match, updated_controller}
     end
   end
 
-  defp maybe_broadcast_progress(count, simulation_id, start_time) do
+  defp maybe_broadcast_progress(count, simulation_id, start_time, prize_tiers_table) do
     if rem(count, 100) == 0 do
-      broadcast_progress(simulation_id, count, start_time)
+      prize_tiers = PrizeTiersTracker.get_all(prize_tiers_table)
+      broadcast_progress(simulation_id, count, start_time, prize_tiers)
     end
   end
 
@@ -880,33 +1023,89 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  defp matches_target?(generated, target_numbers) do
-    # Check if we matched 5+2 (main + euro)
-    main_match =
-      MapSet.new(generated.main) == MapSet.new(target_numbers.main_numbers)
+  @prize_tiers %{
+    # I (5+2)
+    {5, 2} => 1,
+    # II (5+1)
+    {5, 1} => 2,
+    # III (5+0)
+    {5, 0} => 3,
+    # IV (4+2)
+    {4, 2} => 4,
+    # V (4+1)
+    {4, 1} => 5,
+    # VI (3+2)
+    {3, 2} => 6,
+    # VII (4+0)
+    {4, 0} => 7,
+    # VIII (2+2)
+    {2, 2} => 8,
+    # IX (3+1)
+    {3, 1} => 9,
+    # X (3+0)
+    {3, 0} => 10,
+    # XI (1+2)
+    {1, 2} => 11,
+    # XII (2+1)
+    {2, 1} => 12
+  }
 
-    euro_match =
-      MapSet.new(generated.euro) == MapSet.new(target_numbers.euro_numbers)
+  # Calculates all prize tiers that match for a given draw.
+  # For example, if someone matches 5+2, they also technically match 5+1, 5+0, 4+2, 4+1, etc.
+  # Returns a list of all matching tier numbers.
+  defp calculate_all_prize_tiers(generated, target_numbers) do
+    main_matches = count_matches(generated.main, target_numbers.main_numbers)
+    euro_matches = count_matches(generated.euro, target_numbers.euro_numbers)
 
-    main_match && euro_match
+    # Generate all possible combinations from current matches down to minimum winning combinations
+    # Note: euro can be 0 (prizes exist for X+0 combinations)
+    for main <- 1..main_matches,
+        euro <- 0..euro_matches,
+        tier = Map.get(@prize_tiers, {main, euro}),
+        tier != nil do
+      tier
+    end
+    |> Enum.sort()
   end
 
-  defp broadcast_progress(simulation_id, attempts, start_time) do
+  defp count_matches(generated_list, target_list) do
+    generated_set = MapSet.new(generated_list)
+    target_set = MapSet.new(target_list)
+    MapSet.intersection(generated_set, target_set) |> MapSet.size()
+  end
+
+  defp broadcast_progress(simulation_id, attempts, start_time, prize_tiers) do
     duration = System.monotonic_time(:second) - start_time
 
     Phoenix.PubSub.broadcast(
       NumbersEvolution.PubSub,
       "simulation:#{simulation_id}",
-      {:simulation_progress, simulation_id, %{attempts: attempts, duration_seconds: duration}}
+      {:simulation_progress, simulation_id,
+       %{
+         attempts: attempts,
+         duration_seconds: duration,
+         prize_tiers: prize_tiers
+       }}
     )
   end
 
-  defp finalize_simulation(simulation_id, result, start_time, strategy, duplicate_controller) do
+  defp finalize_simulation(
+         simulation_id,
+         result,
+         start_time,
+         strategy,
+         duplicate_controller,
+         prize_tiers_table
+       ) do
     simulation = Repo.get!(Simulation, simulation_id)
     duration = System.monotonic_time(:second) - start_time
 
     # Pobierz statystyki duplikatów
     duplicate_stats = SimulationDuplicateController.get_stats(duplicate_controller)
+
+    # Pobierz statystyki nagród
+    prize_tiers = PrizeTiersTracker.get_all(prize_tiers_table)
+    prize_details = PrizeTiersTracker.get_details(prize_tiers_table)
 
     case result do
       {:success, attempts, matched_numbers, _controller} ->
@@ -916,6 +1115,8 @@ defmodule NumbersEvolution.Simulations do
           attempts_count: attempts,
           duplicates_skipped: duplicate_stats.duplicates_skipped,
           unique_attempts: attempts,
+          prize_tiers: prize_tiers,
+          prize_details: prize_details,
           final_draw: %{
             main_numbers: matched_numbers.main,
             euro_numbers: matched_numbers.euro
@@ -941,7 +1142,9 @@ defmodule NumbersEvolution.Simulations do
           limit_reached: reason,
           attempts_count: attempts,
           duplicates_skipped: duplicate_stats.duplicates_skipped,
-          unique_attempts: attempts
+          unique_attempts: attempts,
+          prize_tiers: prize_tiers,
+          prize_details: prize_details
         }
 
         simulation
@@ -958,7 +1161,9 @@ defmodule NumbersEvolution.Simulations do
           limit_reached: "error",
           error_message: inspect(reason),
           duplicates_skipped: duplicate_stats.duplicates_skipped,
-          unique_attempts: 0
+          unique_attempts: 0,
+          prize_tiers: prize_tiers,
+          prize_details: prize_details
         }
 
         simulation

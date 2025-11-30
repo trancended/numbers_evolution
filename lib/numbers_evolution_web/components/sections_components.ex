@@ -391,6 +391,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
   attr(:simulations, :list, required: true)
   attr(:draws, :list, required: true)
   attr(:live_attempts, :map, default: %{})
+  attr(:live_prize_tiers, :map, default: %{})
   attr(:strategy_pools, :map, default: %{})
   attr(:selected_strategy, :any, default: nil)
   attr(:target_validation_error, :string, default: nil)
@@ -441,6 +442,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <.simulations_table
             simulations={@simulations}
             live_attempts={@live_attempts}
+            live_prize_tiers={@live_prize_tiers}
             strategy_pools={@strategy_pools}
           />
         <% end %>
@@ -626,6 +628,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
   attr(:simulations, :list, required: true)
   attr(:live_attempts, :map, default: %{})
+  attr(:live_prize_tiers, :map, default: %{})
   attr(:strategy_pools, :map, default: %{})
 
   defp simulations_table(assigns) do
@@ -641,6 +644,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             <th>Data utworzenia</th>
             <th>Liczba prób</th>
             <th>Status</th>
+            <th>Wyniki nagród</th>
             <th>Akcje</th>
           </tr>
         </thead>
@@ -726,7 +730,49 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                 </div>
               </td>
               <td>
+                <%= cond do %>
+                  <% sim.status == "running" && @live_prize_tiers -> %>
+                    <% sim_id_string = to_string(sim.id) %>
+                    <%= if Map.has_key?(@live_prize_tiers, sim_id_string) do %>
+                      <% prize_tiers = Map.get(@live_prize_tiers, sim_id_string) %>
+                      <div class="flex flex-wrap gap-1">
+                        <%= for {tier, count} <- prize_tiers
+                              |> Enum.filter(fn {k, _v} -> is_integer(k) end)
+                              |> Enum.filter(fn {_tier, count} -> count > 0 end)
+                              |> Enum.sort_by(&elem(&1, 0)) do %>
+                          <div class="badge badge-warning badge-sm animate-pulse">
+                            {tier}° {format_prize_description(tier)}: {count}
+                          </div>
+                        <% end %>
+                      </div>
+                    <% else %>
+                      <span class="text-gray-400">—</span>
+                    <% end %>
+                  <% sim.status in ["success", "max_attempts_reached", "timeout"] && sim.result && sim.result.prize_tiers -> %>
+                    <div class="flex flex-wrap gap-1">
+                      <%= for {tier, count} <- sim.result.prize_tiers
+                              |> Enum.filter(fn {k, _v} -> is_integer(k) end)
+                              |> Enum.sort_by(&elem(&1, 0))
+                              |> Enum.filter(fn {_tier, count} -> count > 0 end) do %>
+                        <div class="badge badge-primary badge-sm">
+                          {tier}° {format_prize_description(tier)}: {count}
+                        </div>
+                      <% end %>
+                    </div>
+                  <% true -> %>
+                    <span class="text-gray-400">—</span>
+                <% end %>
+              </td>
+              <td>
                 <div class="flex flex-col gap-1">
+                  <button
+                    phx-click="show_simulation_details"
+                    phx-value-id={sim.id}
+                    class="btn btn-sm btn-ghost"
+                    title="Pokaż szczegóły symulacji"
+                  >
+                    <.icon name="hero-eye" class="size-4" /> {"Szczegóły"}
+                  </button>
                   <%= if sim.status == "max_attempts_reached" do %>
                     <button
                       phx-click="show_update_max_attempts"
@@ -1189,5 +1235,240 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       </div>
     </div>
     """
+  end
+
+  @doc """
+  Modal for displaying detailed simulation results.
+  """
+  attr(:simulation, :map, required: true)
+  attr(:show, :boolean, default: false)
+
+  def simulation_details_modal(assigns) do
+    ~H"""
+    <dialog class={["modal", @show && "modal-open"]}>
+      <div class="modal-box max-w-2xl">
+        <h3 class="font-bold text-lg mb-4">Szczegóły symulacji</h3>
+
+        <%= if @simulation do %>
+          <div class="space-y-4">
+            <!-- Basic info -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <span class="font-semibold">Strategia:</span>
+                <span class="ml-2">
+                  {if Ecto.assoc_loaded?(@simulation.strategy) && @simulation.strategy,
+                    do: @simulation.strategy.name,
+                    else: "—"}
+                </span>
+              </div>
+              <div>
+                <span class="font-semibold">Status:</span>
+                <span class="ml-2">
+                  <.status_indicator status={@simulation.status} />
+                </span>
+              </div>
+              <div>
+                <span class="font-semibold">Liczba prób:</span>
+                <span class="ml-2 font-mono">
+                  {format_number(@simulation.attempts_count || 0)}
+                </span>
+              </div>
+              <div>
+                <span class="font-semibold">Czas trwania:</span>
+                <span class="ml-2 font-mono">
+                  {format_duration(@simulation.duration_seconds || 0)}
+                </span>
+              </div>
+            </div>
+            
+    <!-- Target numbers -->
+            <%= if Ecto.assoc_loaded?(@simulation.target_draw) && @simulation.target_draw do %>
+              <div class="border-t border-base-300 pt-4">
+                <h4 class="font-semibold mb-2">Poszukiwane liczby</h4>
+                <div class="flex gap-4">
+                  <div>
+                    <span class="text-sm font-semibold">Główne:</span>
+                    <div class="flex gap-1 mt-1">
+                      <.number_ball
+                        numbers={@simulation.target_draw.numbers.main_numbers}
+                        type="main"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <span class="text-sm font-semibold">Euro:</span>
+                    <div class="flex gap-1 mt-1">
+                      <.number_ball
+                        numbers={@simulation.target_draw.numbers.euro_numbers}
+                        type="euro"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+            
+    <!-- Prize tiers -->
+            <%= if @simulation.result && @simulation.result.prize_tiers do %>
+              <div class="border-t border-base-300 pt-4">
+                <h4 class="font-semibold mb-3">Wyniki nagród</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <%= for {tier, count} <- @simulation.result.prize_tiers
+                        |> Enum.filter(fn {key, _} -> is_integer(key) and key in 1..12 end)
+                        |> Enum.sort_by(&elem(&1, 0)) do %>
+                    <div class={[
+                      "p-4 rounded-lg border",
+                      if(count > 0,
+                        do: "border-primary bg-primary/5",
+                        else: "border-base-300 bg-base-200"
+                      )
+                    ]}>
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="flex flex-col">
+                          <span class="font-semibold text-sm">
+                            {tier}° nagroda {format_prize_description(tier)}
+                          </span>
+                        </div>
+                        <div class="text-right">
+                          <span class={[
+                            "font-bold text-lg",
+                            if(count > 0, do: "text-primary", else: "text-base-content/40")
+                          ]}>
+                            {count}
+                          </span>
+                        </div>
+                      </div>
+                      
+    <!-- Show matched numbers for high tiers (1-5) -->
+                      <%= if tier in 1..5 and count > 0 and @simulation.result.prize_details && @simulation.result.prize_details[tier] do %>
+                        <div class="mt-3 space-y-2">
+                          <span class="text-xs font-semibold text-base-content/70">
+                            Trafione liczby:
+                          </span>
+                          <%= for detail <- @simulation.result.prize_details[tier] |> Enum.take(5) do %>
+                            <div class="flex gap-3 text-xs">
+                              <div class="flex items-center gap-1">
+                                <span class="text-base-content/60">Główne:</span>
+                                <div class="flex gap-1">
+                                  <%= for num <- detail.main_numbers |> Enum.sort() do %>
+                                    <span class="badge badge-xs badge-outline">{num}</span>
+                                  <% end %>
+                                </div>
+                              </div>
+                              <div class="flex items-center gap-1">
+                                <span class="text-base-content/60">Euro:</span>
+                                <div class="flex gap-1">
+                                  <%= for num <- detail.euro_numbers |> Enum.sort() do %>
+                                    <span class="badge badge-xs badge-outline">{num}</span>
+                                  <% end %>
+                                </div>
+                              </div>
+                            </div>
+                          <% end %>
+                          <%= if length(@simulation.result.prize_details[tier]) > 5 do %>
+                            <span class="text-xs text-base-content/50">
+                              ... i {length(@simulation.result.prize_details[tier]) - 5} więcej
+                            </span>
+                          <% end %>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+                
+    <!-- Summary stats -->
+                <div class="mt-4 p-3 bg-base-200 rounded-lg">
+                  <div class="flex justify-between items-center">
+                    <span class="font-semibold">Razem trafionych nagród:</span>
+                    <span class="font-bold text-lg text-primary">
+                      {@simulation.result.prize_tiers
+                      |> Enum.filter(fn {k, _v} -> is_integer(k) end)
+                      |> Enum.map(fn {_k, v} -> v end)
+                      |> Enum.sum()}
+                    </span>
+                  </div>
+                  <%= if @simulation.result.prize_tiers[1] && @simulation.result.prize_tiers[1] > 0 do %>
+                    <div class="flex justify-between items-center mt-1">
+                      <span class="text-sm">W tym jackpotów:</span>
+                      <span class="font-bold text-lg text-success">
+                        {@simulation.result.prize_tiers[1]}
+                      </span>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+            
+    <!-- Matched numbers (if success) -->
+            <%= if @simulation.status == "success" && @simulation.result && @simulation.result.matched_main do %>
+              <div class="border-t border-base-300 pt-4">
+                <h4 class="font-semibold mb-2">Ostateczne trafienie</h4>
+                <div class="flex gap-4">
+                  <div>
+                    <span class="text-sm font-semibold">Główne:</span>
+                    <div class="flex gap-1 mt-1">
+                      <.number_ball
+                        numbers={@simulation.result.matched_main}
+                        type="main"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <span class="text-sm font-semibold">Euro:</span>
+                    <div class="flex gap-1 mt-1">
+                      <.number_ball
+                        numbers={@simulation.result.matched_euro}
+                        type="euro"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+
+        <div class="modal-action">
+          <button phx-click="close_simulation_details" class="btn">Zamknij</button>
+        </div>
+      </div>
+    </dialog>
+    """
+  end
+
+  # Format duration in seconds to human readable format
+  defp format_duration(seconds) when is_float(seconds) do
+    seconds = round(seconds)
+
+    cond do
+      seconds < 60 -> "#{seconds}s"
+      seconds < 3600 -> "#{div(seconds, 60)}m #{rem(seconds, 60)}s"
+      true -> "#{div(seconds, 3600)}h #{div(rem(seconds, 3600), 60)}m #{rem(seconds, 60)}s"
+    end
+  end
+
+  @prize_descriptions %{
+    1 => "(5+2)",
+    2 => "(5+1)",
+    3 => "(5+0)",
+    4 => "(4+2)",
+    5 => "(4+1)",
+    6 => "(3+2)",
+    7 => "(4+0)",
+    8 => "(2+2)",
+    9 => "(3+1)",
+    10 => "(3+0)",
+    11 => "(1+2)",
+    12 => "(2+1)"
+  }
+
+  # Get description for prize tier
+  defp format_prize_description(tier) do
+    @prize_descriptions
+    |> Map.get(tier, "nieznany")
   end
 end

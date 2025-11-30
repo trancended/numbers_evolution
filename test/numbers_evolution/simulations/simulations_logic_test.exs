@@ -314,4 +314,136 @@ defmodule NumbersEvolution.SimulationsLogicTest do
       assert result == {:timeout, "max_attempts"}
     end
   end
+
+  describe "prize tier calculation" do
+    @test_prize_tiers %{
+      # I (5+2)
+      {5, 2} => 1,
+      # II (5+1)
+      {5, 1} => 2,
+      # III (5+0)
+      {5, 0} => 3,
+      # IV (4+2)
+      {4, 2} => 4,
+      # V (4+1)
+      {4, 1} => 5,
+      # VI (3+2)
+      {3, 2} => 6,
+      # VII (4+0)
+      {4, 0} => 7,
+      # VIII (2+2)
+      {2, 2} => 8,
+      # IX (3+1)
+      {3, 1} => 9,
+      # X (3+0)
+      {3, 0} => 10,
+      # XI (1+2)
+      {1, 2} => 11,
+      # XII (2+1)
+      {2, 1} => 12
+    }
+
+    def test_calculate_prize_tier(generated, target) do
+      main_matches = test_count_matches(generated.main, target.main_numbers)
+      euro_matches = test_count_matches(generated.euro, target.euro_numbers)
+
+      Map.get(@test_prize_tiers, {main_matches, euro_matches})
+    end
+
+    def test_count_matches(generated_list, target_list) do
+      generated_set = MapSet.new(generated_list)
+      target_set = MapSet.new(target_list)
+      MapSet.intersection(generated_set, target_set) |> MapSet.size()
+    end
+
+    test "tier 1: 5+2 jackpot" do
+      generated = %{main: [1, 2, 3, 4, 5], euro: [1, 2]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 1
+    end
+
+    test "tier 2: 5+1" do
+      generated = %{main: [1, 2, 3, 4, 5], euro: [1, 9]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 2
+    end
+
+    test "tier 3: 5+0" do
+      generated = %{main: [1, 2, 3, 4, 5], euro: [9, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 3
+    end
+
+    test "tier 4: 4+2" do
+      generated = %{main: [1, 2, 3, 4, 9], euro: [1, 2]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 4
+    end
+
+    test "tier 5: 4+1" do
+      generated = %{main: [1, 2, 3, 4, 9], euro: [1, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 5
+    end
+
+    test "tier 6: 3+2" do
+      generated = %{main: [1, 2, 3, 9, 10], euro: [1, 2]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 6
+    end
+
+    test "tier 7: 4+0" do
+      generated = %{main: [1, 2, 3, 4, 9], euro: [9, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 7
+    end
+
+    test "tier 8: 2+2" do
+      generated = %{main: [1, 2, 9, 10, 11], euro: [1, 2]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 8
+    end
+
+    test "tier 9: 3+1" do
+      generated = %{main: [1, 2, 3, 9, 10], euro: [1, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 9
+    end
+
+    test "tier 10: 3+0" do
+      generated = %{main: [1, 2, 3, 9, 10], euro: [9, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 10
+    end
+
+    test "tier 11: 1+2" do
+      generated = %{main: [1, 9, 10, 11, 12], euro: [1, 2]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 11
+    end
+
+    test "tier 12: 2+1" do
+      generated = %{main: [1, 2, 9, 10, 11], euro: [1, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == 12
+    end
+
+    test "no prize: 0+0" do
+      generated = %{main: [9, 10, 11, 12, 13], euro: [9, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == nil
+    end
+
+    test "no prize: 1+0" do
+      generated = %{main: [1, 9, 10, 11, 12], euro: [9, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == nil
+    end
+
+    test "no prize: 0+1" do
+      generated = %{main: [9, 10, 11, 12, 13], euro: [1, 10]}
+      target = %{main_numbers: [1, 2, 3, 4, 5], euro_numbers: [1, 2]}
+      assert test_calculate_prize_tier(generated, target) == nil
+    end
+  end
 end

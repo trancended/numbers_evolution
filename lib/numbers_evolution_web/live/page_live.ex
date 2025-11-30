@@ -44,9 +44,12 @@ defmodule NumbersEvolutionWeb.PageLive do
       |> assign(:update_timeout_form, to_form(%{}, as: :update_timeout))
       |> assign(:show_restart_simulation_modal, false)
       |> assign(:restart_simulation_id, nil)
+      |> assign(:show_simulation_details_modal, false)
+      |> assign(:simulation_details, nil)
       |> assign(:register_form, to_form(%{}, as: :user))
       |> assign(:login_form, to_form(%{}, as: :user))
       |> assign(:live_attempts, %{})
+      |> assign(:live_prize_tiers, %{})
       |> assign(:selected_strategy, nil)
       |> assign(:strategy_pools, %{})
       |> assign(:target_validation_error, nil)
@@ -758,6 +761,30 @@ defmodule NumbersEvolutionWeb.PageLive do
      |> assign(:restart_simulation, nil)}
   end
 
+  @impl true
+  def handle_event("show_simulation_details", %{"id" => simulation_id}, socket) do
+    user = socket.assigns.current_user
+
+    case Simulations.get_simulation_with_details(user, simulation_id) do
+      {:ok, simulation} ->
+        {:noreply,
+         socket
+         |> assign(:show_simulation_details_modal, true)
+         |> assign(:simulation_details, simulation)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Symulacja nie została znaleziona")}
+    end
+  end
+
+  @impl true
+  def handle_event("close_simulation_details", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_simulation_details_modal, false)
+     |> assign(:simulation_details, nil)}
+  end
+
   # Generator section events
   @impl true
   def handle_event("generate_coupons", params, socket) do
@@ -1093,24 +1120,36 @@ defmodule NumbersEvolutionWeb.PageLive do
   # ============================================================================
 
   @impl true
-  def handle_info({:simulation_progress, simulation_id, %{attempts: attempts}}, socket) do
+  def handle_info({:simulation_progress, simulation_id, %{attempts: attempts} = progress}, socket) do
     # Ensure simulation_id is a string for consistent map keys
     sim_id_string = to_string(simulation_id)
+
+    # Update live attempts
     live_attempts = Map.put(socket.assigns.live_attempts || %{}, sim_id_string, attempts)
 
-    {:noreply, assign(socket, :live_attempts, live_attempts)}
+    # Update live prize tiers if available
+    live_prize_tiers =
+      if Map.has_key?(progress, :prize_tiers) do
+        Map.put(socket.assigns.live_prize_tiers || %{}, sim_id_string, progress.prize_tiers)
+      else
+        socket.assigns.live_prize_tiers || %{}
+      end
+
+    {:noreply, assign(socket, live_attempts: live_attempts, live_prize_tiers: live_prize_tiers)}
   end
 
   @impl true
   def handle_info({:simulation_complete, simulation}, socket) do
     simulation_id = simulation.id
 
-    # Remove from live_attempts and unsubscribe
+    # Remove from live_attempts and live_prize_tiers and unsubscribe
     live_attempts = Map.delete(socket.assigns.live_attempts || %{}, simulation_id)
+    live_prize_tiers = Map.delete(socket.assigns.live_prize_tiers || %{}, simulation_id)
 
     socket =
       socket
       |> assign(:live_attempts, live_attempts)
+      |> assign(:live_prize_tiers, live_prize_tiers)
       |> unsubscribe_from_simulation(simulation_id)
       |> load_simulations()
       |> load_dashboard_data()
@@ -1198,6 +1237,7 @@ defmodule NumbersEvolutionWeb.PageLive do
                 simulations={@simulations}
                 draws={@draws}
                 live_attempts={@live_attempts}
+                live_prize_tiers={@live_prize_tiers}
                 strategy_pools={assigns[:strategy_pools] || %{}}
                 selected_strategy={@selected_strategy}
                 target_validation_error={@target_validation_error}
@@ -1446,6 +1486,11 @@ defmodule NumbersEvolutionWeb.PageLive do
               </div>
             <% end %>
           </.modal>
+        <% end %>
+
+        <%!-- Simulation Details Modal --%>
+        <%= if @show_simulation_details_modal do %>
+          <.simulation_details_modal simulation={@simulation_details} show={true} />
         <% end %>
       <% else %>
         <div class="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10">

@@ -16,7 +16,9 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
           error_message: String.t() | nil,
           final_draw: final_draw() | nil,
           duplicates_skipped: integer() | nil,
-          unique_attempts: integer() | nil
+          unique_attempts: integer() | nil,
+          prize_tiers: map() | nil,
+          prize_details: map() | nil
         }
 
   @type final_draw :: %{
@@ -40,6 +42,10 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
     field(:duplicates_skipped, :integer)
     field(:unique_attempts, :integer)
 
+    # Prize tier tracking
+    field(:prize_tiers, :map)
+    field(:prize_details, :map)
+
     embeds_one :final_draw, FinalDraw, primary_key: false do
       field(:main_numbers, {:array, :integer})
       field(:euro_numbers, {:array, :integer})
@@ -56,7 +62,9 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
       :matched_euro,
       :attempts_count,
       :duplicates_skipped,
-      :unique_attempts
+      :unique_attempts,
+      :prize_tiers,
+      :prize_details
     ])
     |> validate_required([:matched_main, :matched_euro, :attempts_count])
     |> cast_embed(:final_draw, required: true, with: &final_draw_changeset/2)
@@ -76,7 +84,9 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
       :attempts_count,
       :error_message,
       :duplicates_skipped,
-      :unique_attempts
+      :unique_attempts,
+      :prize_tiers,
+      :prize_details
     ])
     |> validate_required([:reason, :limit_reached])
     |> validate_inclusion(:reason, ~w(timeout error))
