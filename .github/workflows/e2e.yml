@@ -1,16 +1,15 @@
-name: E2E Tests (TEMPORARILY DISABLED)
+name: E2E Tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:  # Can also be triggered manually
 
 jobs:
   e2e:
     runs-on: ubuntu-22.04
-    if: false  # Temporarily disabled - too long, enable manually via workflow_dispatch if needed
 
     services:
       postgres:
@@ -197,12 +196,19 @@ jobs:
       run: mix compile
       env:
         MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Setup assets
       run: mix assets.setup
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Build assets
       run: mix assets.build
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Start Phoenix server in background
       run: |

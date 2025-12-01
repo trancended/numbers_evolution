@@ -98,10 +98,9 @@ jobs:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
   e2e:
-    name: E2E Tests (TEMPORARILY SKIPPED)
+    name: E2E Tests
     runs-on: ubuntu-22.04
     needs: test
-    if: false  # Temporarily disabled - too long
 
     services:
       postgres:
@@ -180,6 +179,7 @@ jobs:
       run: mix assets.deploy
       env:
         MIX_ENV: test_e2e
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5437/numbers_evolution_e2e
 
     - name: Setup database
       run: |
