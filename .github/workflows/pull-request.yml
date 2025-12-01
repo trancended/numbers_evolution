@@ -72,6 +72,7 @@ jobs:
       run: mix compile --force --warnings-as-errors
       env:
         MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Create database
       run: mix ecto.create
@@ -87,6 +88,9 @@ jobs:
 
     - name: Run Credo
       run: mix credo
+      env:
+        MIX_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
     - name: Run tests
       run: mix test

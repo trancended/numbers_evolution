@@ -77,12 +77,25 @@ jobs:
 
     - name: Check Formatting
       run: mix format --check-formatted
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
     - name: Compile
       run: mix compile --warnings-as-errors
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
+
+    - name: Setup database
+      run: |
+        mix ecto.create
+        mix ecto.migrate
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
     - name: Run tests
       run: mix test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
   e2e:
     name: E2E Tests (TEMPORARILY SKIPPED)
