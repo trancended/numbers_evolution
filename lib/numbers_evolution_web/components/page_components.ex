@@ -282,20 +282,20 @@ defmodule NumbersEvolutionWeb.PageComponents do
             label="Potwierdź hasło"
             required
           />
+          <div class="modal-action">
+            <button
+              data-cy="register-cancel"
+              type="button"
+              phx-click="close_auth_form"
+              class="btn"
+            >
+              Anuluj
+            </button>
+            <button data-cy="register-submit" type="submit" class="btn btn-primary">
+              Zarejestruj się
+            </button>
+          </div>
         </.form>
-        <:actions>
-          <button
-            data-cy="register-cancel"
-            type="button"
-            phx-click="close_auth_form"
-            class="btn"
-          >
-            Anuluj
-          </button>
-          <button data-cy="register-submit" type="submit" form="register-form" class="btn btn-primary">
-            Zarejestruj się
-          </button>
-        </:actions>
       </.modal>
 
       <%!-- Login Modal --%>
@@ -326,15 +326,15 @@ defmodule NumbersEvolutionWeb.PageComponents do
             label="Hasło"
             required
           />
+          <div class="modal-action">
+            <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
+              Anuluj
+            </button>
+            <button data-cy="login-submit" type="submit" class="btn btn-primary">
+              Zaloguj
+            </button>
+          </div>
         </.form>
-        <:actions>
-          <button data-cy="login-cancel" type="button" phx-click="close_auth_form" class="btn">
-            Anuluj
-          </button>
-          <button data-cy="login-submit" type="submit" form="login-form" class="btn btn-primary">
-            Zaloguj
-          </button>
-        </:actions>
       </.modal>
 
       <%!-- Features Section --%>

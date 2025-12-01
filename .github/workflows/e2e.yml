@@ -1,11 +1,10 @@
-name: E2E Tests
+name: E2E Tests (Manual)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Can also be triggered manually
+  workflow_dispatch:  # Manual trigger - use this to run E2E tests on demand
+  # Optionally uncomment to run on specific branches:
+  # push:
+  #   branches: [ main ]
 
 jobs:
   e2e:

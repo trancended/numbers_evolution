@@ -6,13 +6,13 @@ Projekt wykorzystuje zestaw zautomatyzowanych workflow CI/CD zapewniających wys
 
 ## Workflows
 
-### 1. CI Pipeline (`ci.yml`)
+### 1. CI Pipeline (`ci.yml`) - Main Branch Only
 
-**Trigger:** Push lub Pull Request do branchy `main` lub `e2e_cicd`
+**Trigger:** Push do brancha `main` (po merge PR)
 
 **Joby:**
 - **Test** - Testy jednostkowe i sprawdzanie formatowania
-- **E2E** - Testy end-to-end z użyciem Cypress
+- **E2E** - Testy end-to-end z użyciem Cypress (**TYLKO na main branch**)
 
 **Kroki:**
 1. Setup Elixir i Node.js
@@ -20,22 +20,24 @@ Projekt wykorzystuje zestaw zautomatyzowanych workflow CI/CD zapewniających wys
 3. Sprawdzenie formatowania kodu
 4. Kompilacja z błędami jako ostrzeżeniami
 5. Uruchomienie testów jednostkowych
-6. Uruchomienie testów E2E
+6. Uruchomienie testów E2E (jeśli unit testy przejdą)
 
-### 2. Pull Request Checks (`pull-request.yml`)
+**Note:** E2E testy uruchamiają się TYLKO na main branch dla oszczędności czasu.
+
+### 2. Pull Request Checks (`pull-request.yml`) - Fast Feedback
 
 **Trigger:** Pull Request do brancha `main`
 
 **Joby:**
 - **Lint** - Linting i kompilacja
 - **Unit Test** - Testy jednostkowe
-- **E2E Test** - Testy end-to-end
 - **Status Comment** - Komentarz ze statusem wszystkich checks
 
 **Funkcje:**
+- ⚡ **Szybka walidacja** - tylko unit testy dla natychmiastowego feedbacku
 - Automatyczne komentarze z wynikami CI
+- E2E testy **pominięte** - uruchomią się po merge do main
 - Szczegółowy status każdego joba
-- Artefakty (wideo, screenshoty) z testów E2E
 
 ### 3. Master Branch Quality Gate (`master.yml`)
 
@@ -70,15 +72,22 @@ Projekt wykorzystuje zestaw zautomatyzowanych workflow CI/CD zapewniających wys
 4. Health check aplikacji
 5. Powiadomienie o statusie
 
-### 5. E2E Tests (`e2e.yml`)
+### 5. E2E Tests (`e2e.yml`) - Manual Trigger
 
-**Trigger:** Push lub Pull Request
+**Trigger:** Tylko ręczne uruchomienie (`workflow_dispatch`)
 
 **Funkcje:**
-- Kompleksowe testy end-to-end
+- 🎯 **On-demand testing** - uruchamiaj E2E kiedy potrzebujesz
+- Kompleksowe testy end-to-end z Cypress
 - Automatyczne nagrywanie wideo z testów
 - Screenshoty przy błędach
 - Reset bazy danych przed testami
+
+**Kiedy używać:**
+- Testowanie przed ważnym release
+- Weryfikacja krytycznych zmian w UI
+- Debugowanie problemów E2E
+- Nie uruchamia się automatycznie dla oszczędności czasu CI
 
 ## Reusable Actions
 
@@ -163,6 +172,18 @@ Workflow `deploy.yml` można uruchomić ręcznie:
 3. **Monitoruj** deployment pipeline po merge do master
 4. **Przeglądaj** logi w przypadku błędów
 5. **Aktualizuj** wersje akcji regularnie
+
+## 🚀 Optymalizacja Workflow E2E
+
+Aby przyspieszyć feedback w PR:
+- **Pull Requests**: Uruchamiają tylko unit testy (~2-3 min)
+- **Main Branch**: Uruchamia pełne testy z E2E (~10-15 min)
+- **Manual E2E**: Dostępne przez Actions → E2E Tests (Manual) → Run workflow
+
+To podejście daje:
+- ⚡ Szybki feedback podczas development (unit testy)
+- 🛡️ Pełna walidacja przed deployment (E2E na main)
+- 💰 Oszczędność czasu CI (E2E nie uruchamiają się 3x dla każdego PR)
 
 ## Troubleshooting
 

@@ -2,9 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, e2e_cicd ]
-  pull_request:
-    branches: [ main, e2e_cicd ]
+    branches: [ main ]  # Run full pipeline (including E2E) only on main
 
 env:
   MIX_ENV: test
@@ -97,8 +95,9 @@ jobs:
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
+  # E2E tests run only on main branch after unit tests pass
   e2e:
-    name: E2E Tests
+    name: E2E Tests (Main branch only)
     runs-on: ubuntu-22.04
     needs: test
 
