@@ -1525,7 +1525,7 @@ defmodule NumbersEvolutionWeb.PageLive do
           <%!-- Registration Modal --%>
           <.modal
             :if={@show_register_form}
-            data_cy="register-modal"
+            data-cy="register-modal"
             id="register-modal"
             show={true}
             on_cancel={JS.push("close_auth_form")}
@@ -1581,7 +1581,7 @@ defmodule NumbersEvolutionWeb.PageLive do
           <%!-- Login Modal --%>
           <.modal
             :if={@show_login_form}
-            data_cy="login-modal"
+            data-cy="login-modal"
             id="login-modal"
             show={true}
             on_cancel={JS.push("close_auth_form")}
