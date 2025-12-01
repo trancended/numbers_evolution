@@ -1058,9 +1058,11 @@ defmodule NumbersEvolutionWeb.PageLive do
       )
       |> Repo.all()
 
-    # Combine and sort by creation date
+    # Combine and sort by creation date (newest first)
     (recent_simulations ++ recent_strategies)
-    |> Enum.sort_by(& &1.inserted_at, :desc)
+    |> Enum.sort(fn a, b ->
+      DateTime.compare(a.inserted_at, b.inserted_at) == :gt
+    end)
     |> Enum.take(20)
   end
 
