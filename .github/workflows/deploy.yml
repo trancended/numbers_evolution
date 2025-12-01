@@ -69,10 +69,26 @@ jobs:
     - name: Setup Fly CLI
       uses: superfly/flyctl-actions/setup-flyctl@master
 
+    - name: Start database machine
+      run: |
+        echo "🗄️ Starting database machine..."
+        # List machines to find the database machine ID
+        DB_MACHINE_ID=$(flyctl machines list --app numbers-evolution-db --json | jq -r '.[0].id')
+        echo "Database machine ID: $DB_MACHINE_ID"
+        
+        # Start the database machine
+        flyctl machines start $DB_MACHINE_ID --app numbers-evolution-db || echo "Database machine already running"
+        
+        # Wait for database to be ready
+        echo "⏳ Waiting for database to be ready..."
+        sleep 10
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
     - name: Deploy to Fly.io
       run: |
         echo "🚀 Deploying to Fly.io..."
-        flyctl deploy --remote-only --ha=false
+        flyctl deploy --app numbers-evolution --remote-only --ha=false
       env:
         FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
