@@ -69,6 +69,18 @@ jobs:
     - name: Setup Fly CLI
       uses: superfly/flyctl-actions/setup-flyctl@master
 
+    - name: Verify Fly token
+      run: |
+        if [ -z "$FLY_API_TOKEN" ]; then
+          echo "❌ FLY_API_TOKEN is not set!"
+          echo "Please add FLY_API_TOKEN to GitHub Secrets"
+          exit 1
+        fi
+        echo "✅ FLY_API_TOKEN is present"
+        flyctl auth whoami
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
     - name: Start database machine
       run: |
         echo "🗄️ Starting database machine..."
