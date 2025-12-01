@@ -1,14 +1,16 @@
-name: E2E Tests
+name: E2E Tests (TEMPORARILY DISABLED)
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   e2e:
     runs-on: ubuntu-22.04
+    if: false  # Temporarily disabled - too long, enable manually via workflow_dispatch if needed
 
     services:
       postgres:

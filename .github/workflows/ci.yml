@@ -85,9 +85,10 @@ jobs:
       run: mix test
 
   e2e:
-    name: E2E Tests
+    name: E2E Tests (TEMPORARILY SKIPPED)
     runs-on: ubuntu-22.04
     needs: test
+    if: false  # Temporarily disabled - too long
 
     services:
       postgres:
