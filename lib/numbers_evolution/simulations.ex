@@ -536,7 +536,6 @@ defmodule NumbersEvolution.Simulations do
           started_at: nil,
           completed_at: nil
         })
-        |> Ecto.Changeset.put_embed(:result, nil)
         |> Repo.update()
       else
         {:error, :simulation_running}
