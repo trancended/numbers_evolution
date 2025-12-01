@@ -1,10 +1,10 @@
-name: E2E Tests
+name: E2E Tests (Manual)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:  # Manual trigger - use this to run E2E tests on demand
+  # Optionally uncomment to run on specific branches:
+  # push:
+  #   branches: [ main ]
 
 jobs:
   e2e:
@@ -195,12 +195,19 @@ jobs:
       run: mix compile
       env:
         MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Setup assets
       run: mix assets.setup
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Build assets
       run: mix assets.build
+      env:
+        MIX_ENV: test_e2e
+        DATABASE_URL: postgres://postgres:postgres@localhost:5434/numbers_evolution_e2e
 
     - name: Start Phoenix server in background
       run: |

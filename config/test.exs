@@ -9,6 +9,7 @@ config :numbers_evolution, NumbersEvolution.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
+  port: 5432,
   database: "numbers_evolution_test",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2

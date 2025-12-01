@@ -499,7 +499,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   attr(:id, :string, required: true)
   attr(:show, :boolean, default: false)
   attr(:on_cancel, :any, default: nil)
-  attr(:data_cy, :string)
+  attr(:"data-cy", :string)
   attr(:size, :string, default: nil)
 
   slot(:title)
@@ -510,7 +510,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
     ~H"""
     <div
       id={@id}
-      data-cy={@data_cy}
+      data-cy={Map.get(assigns, :"data-cy")}
       class={["modal", @show && "modal-open"]}
       phx-remove={hide_modal(@id)}
     >

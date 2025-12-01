@@ -56,7 +56,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
 
       <%!-- Strategy Form Modal --%>
       <.modal
-        data_cy="strategy-form-modal"
+        data-cy="strategy-form-modal"
         id="strategy-form-modal"
         show={@show_strategy_form}
         on_cancel={JS.push("close_strategy_form")}

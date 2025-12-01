@@ -20,6 +20,13 @@ if System.get_env("PHX_SERVER") do
   config :numbers_evolution, NumbersEvolutionWeb.Endpoint, server: true
 end
 
+# Support DATABASE_URL in test environments (for CI)
+if config_env() in [:test, :test_e2e] do
+  if database_url = System.get_env("DATABASE_URL") do
+    config :numbers_evolution, NumbersEvolution.Repo, url: database_url
+  end
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
