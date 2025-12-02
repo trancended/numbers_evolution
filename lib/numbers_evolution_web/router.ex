@@ -25,7 +25,16 @@ defmodule NumbersEvolutionWeb.Router do
   scope "/", NumbersEvolutionWeb do
     pipe_through(:browser)
 
+    # Landing page - redirects to dashboard if authenticated
     live("/", PageLive, :index)
+
+    # Authenticated routes
+    live("/dashboard", DashboardLive, :index)
+    live("/strategies", StrategiesLive, :index)
+    live("/simulations", SimulationsLive, :index)
+    live("/ranking", RankingLive, :index)
+    live("/generator", GeneratorLive, :index)
+    live("/admin", AdminLive, :index)
   end
 
   # Public API routes
