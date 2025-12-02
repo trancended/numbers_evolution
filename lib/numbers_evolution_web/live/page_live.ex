@@ -305,21 +305,31 @@ defmodule NumbersEvolutionWeb.PageLive do
   # Simulations section events
   @impl true
   def handle_event("strategy_changed", %{"strategy_id" => strategy_id}, socket) do
-    if strategy_id != "" do
-      strategy = Strategies.get_strategy!(socket.assigns.current_user, strategy_id)
-      half_random_mode = socket.assigns.half_random_mode
-      pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_mode)
+    socket =
+      if strategy_id != "" do
+        strategy = Strategies.get_strategy!(socket.assigns.current_user, strategy_id)
+        half_random_mode = socket.assigns.half_random_mode
+        pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_mode)
 
-      socket
-      |> assign(:selected_strategy, strategy)
-      |> assign(:strategy_pools, pools)
-      |> assign(:target_validation_error, nil)
-    else
-      socket
-      |> assign(:selected_strategy, nil)
-      |> assign(:strategy_pools, %{})
-      |> assign(:target_validation_error, nil)
-    end
+        # Filter draws if strategy is VIP (requires constraints)
+        all_draws = Draws.list_draws(limit: 50)
+        filtered_draws = filter_draws_for_strategy(all_draws, strategy)
+
+        socket
+        |> assign(:selected_strategy, strategy)
+        |> assign(:strategy_pools, pools)
+        |> assign(:draws, filtered_draws)
+        |> assign(:target_validation_error, nil)
+      else
+        # No strategy selected - show all draws
+        all_draws = Draws.list_draws(limit: 50)
+
+        socket
+        |> assign(:selected_strategy, nil)
+        |> assign(:strategy_pools, %{})
+        |> assign(:draws, all_draws)
+        |> assign(:target_validation_error, nil)
+      end
 
     {:noreply, socket}
   end
@@ -374,38 +384,10 @@ defmodule NumbersEvolutionWeb.PageLive do
 
     case Simulations.create_and_start_simulation(user, params) do
       {:ok, simulation} ->
-        # Get strategy and target draw for display
-        strategy = Strategies.get_strategy!(user, params["strategy_id"])
-        target_draw = Draws.get_draw!(params["target_draw_id"])
+        handle_simulation_started(socket, simulation, user, params)
 
-        main_numbers = Enum.join(target_draw.numbers.main_numbers, ", ")
-        euro_numbers = Enum.join(target_draw.numbers.euro_numbers, ", ")
-
-        target_info =
-          "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
-
-        socket =
-          socket
-          |> put_flash(:info, "Symulacja została uruchomiona w tle. #{target_info}")
-          |> load_simulations()
-          |> load_dashboard_data()
-          |> subscribe_to_simulation(simulation.id)
-
-        {:noreply, socket}
-
-      {:error, :strategy_not_found} ->
-        {:noreply, put_flash(socket, :error, "Nie znaleziono strategii")}
-
-      {:error, :draw_not_found} ->
-        {:noreply, put_flash(socket, :error, "Nie znaleziono losowania")}
-
-      {:error, changeset} when is_struct(changeset) ->
-        errors = translate_errors(changeset)
-        {:noreply, put_flash(socket, :error, "Błąd walidacji: #{errors}")}
-
-      {:error, reason} ->
-        {:noreply,
-         put_flash(socket, :error, "Nie udało się uruchomić symulacji: #{inspect(reason)}")}
+      {:error, error} ->
+        {:noreply, handle_simulation_error(socket, error)}
     end
   end
 
@@ -847,7 +829,7 @@ defmodule NumbersEvolutionWeb.PageLive do
         {:noreply, put_flash(socket, :error, "Prompt musi mieć minimum 10 znaków")}
 
       {:error, :prompt_too_long} ->
-        {:noreply, put_flash(socket, :error, "Prompt nie może przekraczać 500 znaków")}
+        {:noreply, put_flash(socket, :error, "Prompt nie może przekraczać 1000 znaków")}
 
       {:error, :generation_failed} ->
         {:noreply,
@@ -887,6 +869,140 @@ defmodule NumbersEvolutionWeb.PageLive do
   @impl true
   def handle_event("clear_generated_strategy", _params, socket) do
     {:noreply, assign(socket, :generated_strategy, nil)}
+  end
+
+  # ============================================================================
+  # Private Functions - Simulation Helpers
+  # ============================================================================
+
+  defp handle_simulation_started(socket, simulation, user, params) do
+    strategy = Strategies.get_strategy!(user, params["strategy_id"])
+    target_draw = Draws.get_draw!(params["target_draw_id"])
+
+    main_numbers = Enum.join(target_draw.numbers.main_numbers, ", ")
+    euro_numbers = Enum.join(target_draw.numbers.euro_numbers, ", ")
+
+    target_info =
+      "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
+
+    vip1_info = format_vip1_info(simulation.options)
+
+    socket =
+      socket
+      |> put_flash(:info, "Symulacja została uruchomiona w tle. #{target_info}#{vip1_info}")
+      |> load_simulations()
+      |> load_dashboard_data()
+      |> subscribe_to_simulation(simulation.id)
+
+    {:noreply, socket}
+  end
+
+  defp format_vip1_info(%{"vip1_mode" => true, "vip1_pool" => pool}) when not is_nil(pool) do
+    "\n🎰 Tryb VIP1 aktywny - pula: #{length(pool["main_pool"])} głównych, #{length(pool["euro_pool"])} euro"
+  end
+
+  defp format_vip1_info(_), do: ""
+
+  defp handle_simulation_error(socket, :strategy_not_found) do
+    put_flash(socket, :error, "Nie znaleziono strategii")
+  end
+
+  defp handle_simulation_error(socket, :draw_not_found) do
+    put_flash(socket, :error, "Nie znaleziono losowania")
+  end
+
+  defp handle_simulation_error(socket, %{type: :vip1_pool_invalid} = error) do
+    put_flash(socket, :error, format_vip1_pool_error(error))
+  end
+
+  defp handle_simulation_error(socket, %{type: :vip2_blacklist_invalid} = error) do
+    put_flash(socket, :error, format_vip2_blacklist_error(error))
+  end
+
+  defp handle_simulation_error(socket, %{type: :vip_constraints_not_met} = error) do
+    put_flash(socket, :error, format_vip_constraints_error(error))
+  end
+
+  defp handle_simulation_error(socket, %{type: :vip1_pool_generation_failed}) do
+    put_flash(
+      socket,
+      :error,
+      "🎰 VIP1: Nie udało się wygenerować prawidłowej puli po 100 próbach. To bardzo rzadkie - spróbuj ponownie lub wybierz inne losowanie."
+    )
+  end
+
+  defp handle_simulation_error(socket, %{type: :vip2_blacklist_generation_failed}) do
+    put_flash(
+      socket,
+      :error,
+      "🎲 VIP2: Nie udało się wygenerować prawidłowego blacklistu po 100 próbach. To bardzo rzadkie - spróbuj ponownie lub wybierz inne losowanie."
+    )
+  end
+
+  defp handle_simulation_error(socket, changeset) when is_struct(changeset) do
+    errors = translate_errors(changeset)
+    put_flash(socket, :error, "Błąd walidacji: #{errors}")
+  end
+
+  defp handle_simulation_error(socket, reason) do
+    put_flash(socket, :error, "Nie udało się uruchomić symulacji: #{inspect(reason)}")
+  end
+
+  defp format_vip1_pool_error(error) do
+    missing_main = Enum.join(error.missing_main, ", ")
+    missing_euro = Enum.join(error.missing_euro, ", ")
+
+    pool_info =
+      "Wylosowana pula: Główne [#{Enum.join(error.pool.main_pool, ", ")}] Euro [#{Enum.join(error.pool.euro_pool, ", ")}]"
+
+    cond do
+      missing_main != "" and missing_euro != "" ->
+        "🎰 VIP1: Wylosowany zestaw nie zawiera liczb głównych: #{missing_main} oraz euro: #{missing_euro}. #{pool_info} Ponów próbę!"
+
+      missing_main != "" ->
+        "🎰 VIP1: Wylosowany zestaw nie zawiera liczb głównych: #{missing_main}. #{pool_info} Ponów próbę!"
+
+      true ->
+        "🎰 VIP1: Wylosowany zestaw nie zawiera liczb euro: #{missing_euro}. #{pool_info} Ponów próbę!"
+    end
+  end
+
+  defp format_vip2_blacklist_error(error) do
+    blocked_main = Enum.join(error.blocked_main, ", ")
+    blocked_euro = Enum.join(error.blocked_euro, ", ")
+
+    available_info =
+      "Dostępne liczby: Główne [#{Enum.join(error.main_available, ", ")}] Euro [#{Enum.join(error.euro_available, ", ")}]"
+
+    cond do
+      blocked_main != "" and blocked_euro != "" ->
+        "🎲 VIP2: Losowy blacklist wykluczył poszukiwane liczby główne: #{blocked_main} oraz euro: #{blocked_euro}. #{available_info} Ponów próbę!"
+
+      blocked_main != "" ->
+        "🎲 VIP2: Losowy blacklist wykluczył poszukiwane liczby główne: #{blocked_main}. #{available_info} Ponów próbę!"
+
+      true ->
+        "🎲 VIP2: Losowy blacklist wykluczył poszukiwane liczby euro: #{blocked_euro}. #{available_info} Ponów próbę!"
+    end
+  end
+
+  defp format_vip_constraints_error(error) do
+    target_main = Enum.join(error.target_main, ", ")
+    target_euro = Enum.join(error.target_euro, ", ")
+    constraints_list = Enum.join(error.constraints, " • ")
+
+    """
+    ❌ Tryb VIP (VIP1/VIP2) wymaga aby poszukiwane liczby spełniały ograniczenia:
+    • Dokładnie 2 nieparzyste + 3 parzyste liczby główne
+    • Maksymalnie 2 liczby w jednej dziesiątce
+
+    Poszukiwane liczby: [#{target_main}] + [#{target_euro}]
+
+    Problemy:
+    #{constraints_list}
+
+    Wybierz inne losowanie lub wyłącz tryb VIP.
+    """
   end
 
   # ============================================================================
@@ -1002,6 +1118,35 @@ defmodule NumbersEvolutionWeb.PageLive do
     |> assign(:strategy_pools, strategy_pools)
     |> assign(:selected_strategy, nil)
     |> assign(:target_validation_error, nil)
+  end
+
+  # Filter draws to show only those that meet strategy constraints
+  defp filter_draws_for_strategy(draws, strategy) do
+    if vip_strategy?(strategy) do
+      filter_draws_by_vip_constraints(draws)
+    else
+      draws
+    end
+  end
+
+  defp filter_draws_by_vip_constraints(draws) do
+    Enum.filter(draws, &draw_meets_vip_constraints?/1)
+  end
+
+  defp draw_meets_vip_constraints?(draw) do
+    case Generator.validate_vip_constraints(
+           draw.numbers.main_numbers,
+           draw.numbers.euro_numbers
+         ) do
+      :ok -> true
+      {:error, _} -> false
+    end
+  end
+
+  # Check if strategy is VIP (VIP1 or VIP2)
+  defp vip_strategy?(%{name: name}) do
+    name_upper = String.upcase(name)
+    String.contains?(name_upper, "VIP1") or String.contains?(name_upper, "VIP2")
   end
 
   # ============================================================================
@@ -1379,6 +1524,14 @@ defmodule NumbersEvolutionWeb.PageLive do
                                                               "half_random_mode"
                                                             ], do: "Tak", else: "Nie"}
                     </div>
+                    <div>
+                      <strong>Tryb VIP1:</strong>
+                      <%= if @restart_simulation.options["vip1_mode"] do %>
+                        <span class="badge badge-warning badge-sm">🎰 Tak</span>
+                      <% else %>
+                        Nie
+                      <% end %>
+                    </div>
                   </div>
                 </div>
 
@@ -1466,6 +1619,34 @@ defmodule NumbersEvolutionWeb.PageLive do
                             Aktualnie: {if @restart_simulation.options["half_random_mode"],
                               do: "Włączone",
                               else: "Wyłączone"}
+                          </span>
+                        </label>
+                      </div>
+
+                      <div class="divider"></div>
+
+                      <div class="form-control">
+                        <label class="label cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id="restart_vip1_mode_checkbox"
+                            name="vip1_mode"
+                            value="true"
+                            class="checkbox checkbox-warning"
+                          />
+                          <span class="label-text ml-2 font-semibold text-warning">
+                            🎰 Tryb VIP1
+                          </span>
+                        </label>
+                        <label class="label">
+                          <span class="label-text-alt">
+                            Aktualnie: {if @restart_simulation.options["vip1_mode"],
+                              do: "Włączone",
+                              else: "Wyłączone"}
+                            <br />
+                            <span class="text-warning">
+                              VIP1: 50% liczb pominięte, max 2 w dziesiątce, 2 nieparzyste + 3 parzyste
+                            </span>
                           </span>
                         </label>
                       </div>

@@ -39,6 +39,7 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
       field(:ratio_low_high, {:array, :integer})
       field(:preferred_hot, {:array, :integer})
       field(:preferred_cold, {:array, :integer})
+      field(:blacklist, {:array, :integer}, default: [])
 
       embeds_one :weights, Weights, primary_key: false do
         field(:hot, :float)
@@ -50,6 +51,7 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
     embeds_one :euro_numbers, EuroNumbers, primary_key: false do
       field(:ratio_even_odd, {:array, :integer})
       field(:preferred, {:array, :integer})
+      field(:blacklist, {:array, :integer}, default: [])
 
       embeds_one :weights, Weights, primary_key: false do
         field(:hot, :float)
@@ -70,22 +72,24 @@ defmodule NumbersEvolution.Strategies.StrategyRules do
 
   defp main_numbers_changeset(main_numbers, attrs) do
     main_numbers
-    |> cast(attrs, [:ratio_even_odd, :ratio_low_high, :preferred_hot, :preferred_cold])
+    |> cast(attrs, [:ratio_even_odd, :ratio_low_high, :preferred_hot, :preferred_cold, :blacklist])
     |> validate_required([:ratio_even_odd, :ratio_low_high])
     |> cast_embed(:weights, required: true, with: &main_weights_changeset/2)
     |> validate_ratio_sum(:ratio_even_odd, 5)
     |> validate_ratio_sum(:ratio_low_high, 5)
     |> validate_number_range(:preferred_hot, 1..50)
     |> validate_number_range(:preferred_cold, 1..50)
+    |> validate_number_range(:blacklist, 1..50)
   end
 
   defp euro_numbers_changeset(euro_numbers, attrs) do
     euro_numbers
-    |> cast(attrs, [:ratio_even_odd, :preferred])
+    |> cast(attrs, [:ratio_even_odd, :preferred, :blacklist])
     |> validate_required([:ratio_even_odd])
     |> cast_embed(:weights, required: true, with: &euro_weights_changeset/2)
     |> validate_ratio_sum(:ratio_even_odd, 2)
     |> validate_number_range(:preferred, 1..12)
+    |> validate_number_range(:blacklist, 1..12)
   end
 
   defp main_weights_changeset(weights, attrs) do

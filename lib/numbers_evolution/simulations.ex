@@ -9,7 +9,12 @@ defmodule NumbersEvolution.Simulations do
   alias NumbersEvolution.Accounts.User
   alias NumbersEvolution.{AtomicCounter, Draws, Strategies}
   alias NumbersEvolution.Repo
-  alias NumbersEvolution.Simulations.{Simulation, SimulationDuplicateController}
+
+  alias NumbersEvolution.Simulations.{
+    Simulation,
+    SimulationDuplicateController,
+    SimulationResult
+  }
 
   defmodule PrizeTiersTracker do
     @moduledoc """
@@ -70,11 +75,12 @@ defmodule NumbersEvolution.Simulations do
     end
 
     @doc """
-    Gets all prize tiers as a map.
+    Gets all prize tiers as a map (only tier counts, not details).
     """
     def get_all(table_name) do
       table_name
       |> :ets.tab2list()
+      |> Enum.filter(fn {key, _value} -> is_integer(key) end)
       |> Enum.into(%{})
     end
 
@@ -132,6 +138,9 @@ defmodule NumbersEvolution.Simulations do
       :current_attempt,
       :simulation_id,
       :half_random_mode,
+      :vip1_mode,
+      :vip1_pool,
+      :vip2_blacklist,
       :thread_count,
       :counter_table,
       :prize_tiers_table
@@ -296,14 +305,180 @@ defmodule NumbersEvolution.Simulations do
   Each process has independent access to the database connection pool.
   """
   @spec create_and_start_simulation(User.t(), map()) ::
-          {:ok, Simulation.t()} | {:error, Ecto.Changeset.t() | atom()}
+          {:ok, Simulation.t()} | {:error, Ecto.Changeset.t() | atom() | map()}
   def create_and_start_simulation(%User{id: user_id} = user, attrs) do
+    vip1_mode = parse_boolean(attrs["vip1_mode"], false)
+
     with {:ok, strategy} <- validate_strategy(user, attrs["strategy_id"]),
          {:ok, target_draw} <- validate_draw(attrs["target_draw_id"]),
-         {:ok, simulation} <- create_simulation_record(user_id, attrs) do
+         {:ok, attrs_with_pool} <- maybe_generate_vip1_pool(attrs, target_draw, vip1_mode),
+         {:ok, attrs_with_vip2} <-
+           maybe_generate_vip2_blacklist(attrs_with_pool, strategy, target_draw),
+         {:ok, simulation} <- create_simulation_record(user_id, attrs_with_vip2) do
       # Start async execution
       start_simulation_task(simulation, strategy, target_draw)
       {:ok, simulation}
+    end
+  end
+
+  # Generate VIP1 pool if VIP1 mode is enabled and validate it contains target numbers
+  defp maybe_generate_vip1_pool(attrs, target_draw, true) do
+    alias NumbersEvolution.Strategies.Generator
+
+    target_main = target_draw.numbers.main_numbers
+    target_euro = target_draw.numbers.euro_numbers
+
+    # First, validate that target numbers meet VIP constraints
+    case Generator.validate_vip_constraints(target_main, target_euro) do
+      :ok ->
+        # Target meets constraints, try generating pool with retry
+        generate_vip1_pool_with_retry(attrs, target_main, target_euro, 100)
+
+      {:error, constraint_errors} ->
+        # Target numbers don't meet VIP constraints
+        {:error,
+         %{
+           type: :vip_constraints_not_met,
+           message: "Poszukiwane liczby nie spełniają ograniczeń VIP",
+           constraints: constraint_errors,
+           target_main: target_main,
+           target_euro: target_euro
+         }}
+    end
+  end
+
+  defp maybe_generate_vip1_pool(attrs, _target_draw, false), do: {:ok, attrs}
+
+  # Retry VIP1 pool generation up to max_attempts times
+  defp generate_vip1_pool_with_retry(attrs, target_main, target_euro, max_attempts) do
+    alias NumbersEvolution.Strategies.Generator
+
+    Enum.reduce_while(1..max_attempts, nil, fn attempt, _acc ->
+      {:ok, pool} = Generator.generate_vip1_pool()
+
+      case Generator.validate_vip1_pool_contains_target(pool, target_main, target_euro) do
+        :ok ->
+          success_vip1_pool(attrs, pool)
+
+        {:error, _} ->
+          handle_vip1_pool_retry(attempt, max_attempts, target_main, target_euro)
+      end
+    end)
+  end
+
+  defp success_vip1_pool(attrs, pool) do
+    attrs_with_pool =
+      Map.put(attrs, "vip1_pool", %{
+        "main_pool" => pool.main_pool,
+        "euro_pool" => pool.euro_pool
+      })
+
+    {:halt, {:ok, attrs_with_pool}}
+  end
+
+  defp handle_vip1_pool_retry(attempt, max_attempts, target_main, target_euro) do
+    if attempt == max_attempts do
+      {:halt,
+       {:error,
+        %{
+          type: :vip1_pool_generation_failed,
+          message: "Nie udało się wygenerować prawidłowej puli VIP1 po #{max_attempts} próbach",
+          target_main: target_main,
+          target_euro: target_euro
+        }}}
+    else
+      {:cont, nil}
+    end
+  end
+
+  # Generate VIP2 blacklist if strategy is VIP2 (auto-blacklist)
+  defp maybe_generate_vip2_blacklist(attrs, strategy, target_draw) do
+    if vip2_strategy?(strategy) do
+      generate_vip2_blacklist(attrs, target_draw)
+    else
+      {:ok, attrs}
+    end
+  end
+
+  # Check if strategy is VIP2 (has empty blacklist and VIP2 in name)
+  defp vip2_strategy?(%{name: name, rules: rules}) do
+    main_bl = rules.main_numbers.blacklist || []
+    euro_bl = rules.euro_numbers.blacklist || []
+    is_empty_blacklist = Enum.empty?(main_bl) and Enum.empty?(euro_bl)
+    is_vip2_name = String.contains?(String.upcase(name), "VIP2")
+
+    is_empty_blacklist and is_vip2_name
+  end
+
+  # Generate random blacklist for VIP2 and validate against target numbers
+  defp generate_vip2_blacklist(attrs, target_draw) do
+    alias NumbersEvolution.Strategies.Generator
+
+    target_main = target_draw.numbers.main_numbers
+    target_euro = target_draw.numbers.euro_numbers
+
+    # First, validate that target numbers meet VIP constraints
+    case Generator.validate_vip_constraints(target_main, target_euro) do
+      :ok ->
+        # Target meets constraints, try generating blacklist with retry
+        generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, 100)
+
+      {:error, constraint_errors} ->
+        # Target numbers don't meet VIP constraints
+        {:error,
+         %{
+           type: :vip_constraints_not_met,
+           message: "Poszukiwane liczby nie spełniają ograniczeń VIP",
+           constraints: constraint_errors,
+           target_main: target_main,
+           target_euro: target_euro
+         }}
+    end
+  end
+
+  # Retry VIP2 blacklist generation up to max_attempts times
+  defp generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, max_attempts) do
+    all_main = 1..50 |> Enum.to_list()
+    all_euro = 1..12 |> Enum.to_list()
+
+    Enum.reduce_while(1..max_attempts, nil, fn attempt, _acc ->
+      main_blacklist = Enum.take_random(all_main, 25)
+      euro_blacklist = Enum.take_random(all_euro, 6)
+
+      blocked_main = Enum.filter(target_main, &(&1 in main_blacklist))
+      blocked_euro = Enum.filter(target_euro, &(&1 in euro_blacklist))
+
+      if Enum.empty?(blocked_main) and Enum.empty?(blocked_euro) do
+        success_vip2_blacklist(attrs, main_blacklist, euro_blacklist)
+      else
+        handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro)
+      end
+    end)
+  end
+
+  defp success_vip2_blacklist(attrs, main_blacklist, euro_blacklist) do
+    attrs_with_vip2 =
+      Map.put(attrs, "vip2_blacklist", %{
+        "main_blacklist" => main_blacklist,
+        "euro_blacklist" => euro_blacklist
+      })
+
+    {:halt, {:ok, attrs_with_vip2}}
+  end
+
+  defp handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro) do
+    if attempt == max_attempts do
+      {:halt,
+       {:error,
+        %{
+          type: :vip2_blacklist_generation_failed,
+          message:
+            "Nie udało się wygenerować prawidłowego blacklistu VIP2 po #{max_attempts} próbach",
+          target_main: target_main,
+          target_euro: target_euro
+        }}}
+    else
+      {:cont, nil}
     end
   end
 
@@ -672,14 +847,34 @@ defmodule NumbersEvolution.Simulations do
     max_attempts = parse_int(attrs["max_attempts"], 1_000_000)
     timeout_seconds = parse_int(attrs["timeout_seconds"], 86_400)
     half_random_mode = parse_boolean(attrs["half_random_mode"], false)
+    vip1_mode = parse_boolean(attrs["vip1_mode"], false)
     thread_count = parse_int(attrs["thread_count"], 10)
 
-    %{
+    base_options = %{
       "max_attempts" => max_attempts,
       "timeout_seconds" => timeout_seconds,
       "half_random_mode" => half_random_mode,
+      "vip1_mode" => vip1_mode,
       "thread_count" => thread_count
     }
+
+    # Add VIP1 pool if provided
+    base_options =
+      if attrs["vip1_pool"] do
+        Map.put(base_options, "vip1_pool", attrs["vip1_pool"])
+      else
+        base_options
+      end
+
+    # Add VIP2 blacklist if provided
+    base_options =
+      if attrs["vip2_blacklist"] do
+        Map.put(base_options, "vip2_blacklist", attrs["vip2_blacklist"])
+      else
+        base_options
+      end
+
+    base_options
   end
 
   defp parse_int(nil, default), do: default
@@ -739,14 +934,21 @@ defmodule NumbersEvolution.Simulations do
         try do
           simulation = Repo.get!(Simulation, simulation.id)
 
+          result_data = %{
+            "reason" => "error",
+            "limit_reached" => "error",
+            "error_message" => "Failed to start task: #{inspect(reason)}"
+          }
+
+          result_changeset = SimulationResult.timeout_changeset(%SimulationResult{}, result_data)
+          result_struct = Ecto.Changeset.apply_changes(result_changeset)
+
           simulation
           |> Simulation.completion_changeset("error", %{
             attempts_count: 0,
             duration_seconds: 0.0
           })
-          |> Ecto.Changeset.put_embed(:result, %{
-            error_message: "Failed to start task: #{inspect(reason)}"
-          })
+          |> Ecto.Changeset.put_embed(:result, result_struct)
           |> Repo.update()
         rescue
           _ -> :ok
@@ -794,7 +996,32 @@ defmodule NumbersEvolution.Simulations do
 
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
+      vip1_mode = Map.get(options, "vip1_mode", false)
+      vip1_pool = Map.get(options, "vip1_pool")
+      vip2_blacklist = Map.get(options, "vip2_blacklist")
       thread_count = Map.get(options, "thread_count", 48)
+
+      # Convert VIP1 pool to the format expected by Generator
+      vip1_pool_converted =
+        if vip1_pool do
+          %{
+            main_pool: vip1_pool["main_pool"],
+            euro_pool: vip1_pool["euro_pool"]
+          }
+        else
+          nil
+        end
+
+      # Convert VIP2 blacklist to the format expected by Generator
+      vip2_blacklist_converted =
+        if vip2_blacklist do
+          %{
+            main_blacklist: vip2_blacklist["main_blacklist"],
+            euro_blacklist: vip2_blacklist["euro_blacklist"]
+          }
+        else
+          nil
+        end
 
       context = %SimulationContext{
         strategy: strategy,
@@ -806,6 +1033,9 @@ defmodule NumbersEvolution.Simulations do
         current_attempt: 0,
         simulation_id: simulation_id,
         half_random_mode: half_random_mode,
+        vip1_mode: vip1_mode,
+        vip1_pool: vip1_pool_converted,
+        vip2_blacklist: vip2_blacklist_converted,
         thread_count: thread_count,
         counter_table: counter_table,
         prize_tiers_table: prize_tiers_table
@@ -830,16 +1060,21 @@ defmodule NumbersEvolution.Simulations do
         try do
           simulation = Repo.get!(Simulation, simulation_id)
 
+          result_data = %{
+            "reason" => "error",
+            "limit_reached" => "error",
+            "error_message" => Exception.message(e)
+          }
+
+          result_changeset = SimulationResult.timeout_changeset(%SimulationResult{}, result_data)
+          result_struct = Ecto.Changeset.apply_changes(result_changeset)
+
           simulation
           |> Simulation.completion_changeset("error", %{
             attempts_count: 0,
             duration_seconds: 0.0
           })
-          |> Ecto.Changeset.put_embed(:result, %{
-            reason: "error",
-            limit_reached: "error",
-            error_message: Exception.message(e)
-          })
+          |> Ecto.Changeset.put_embed(:result, result_struct)
           |> Repo.update!()
         rescue
           _ -> :ok
@@ -874,29 +1109,78 @@ defmodule NumbersEvolution.Simulations do
         end)
       end)
 
-    # Poczekaj na pierwsze zakończenie zadania (pierwsze które znajdzie dopasowanie lub przetworzy próbę)
-    case Task.yield_many(tasks, 5000) do
-      [{_task, {:match_found, generated, updated_controller}} | _rest] ->
-        # Znaleziono dopasowanie - anuluj pozostałe zadania
-        Enum.each(tasks, &Task.shutdown/1)
-        {:success, AtomicCounter.get(context.counter_table), generated, updated_controller}
+    # Poczekaj na zakończenie zadań i przetwórz wyniki
+    results = Task.yield_many(tasks, 5000)
+    match_result = find_match_in_results(results)
 
-      [] ->
-        # Brak zakończonych zadań w czasie - spróbuj ponownie
-        process_simulation_attempts_parallel(context)
+    handle_parallel_results(match_result, tasks, results, context)
+  end
 
-      _results ->
-        # Wszystkie zadania zakończone ale bez dopasowania - kontynuuj
-        simulate_until_match(context)
+  defp find_match_in_results(results) do
+    Enum.find_value(results, fn
+      {_task, {:ok, {:match_found, generated, updated_controller}}} ->
+        {:found, generated, updated_controller}
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp handle_parallel_results({:found, generated, updated_controller}, tasks, _results, context) do
+    require Logger
+    # Znaleziono dopasowanie - daj wątkom krótki moment na zapisanie bieżących danych
+    # do tabeli ETS, a potem je zatrzymaj
+    Logger.info("Found match, waiting for tasks to save data...")
+    # Zwiększ do 500ms aby mieć pewność
+    Process.sleep(500)
+
+    # Sprawdź stan tabeli PRZED zabiciem wątków
+    before_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
+    Logger.info("Prize tiers BEFORE killing tasks: #{inspect(before_kill)}")
+
+    Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
+
+    # Sprawdź stan tabeli PO zabiciu wątków
+    after_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
+    Logger.info("Prize tiers AFTER killing tasks: #{inspect(after_kill)}")
+
+    {:success, AtomicCounter.get(context.counter_table), generated, updated_controller}
+  end
+
+  defp handle_parallel_results(nil, _tasks, results, context) do
+    # Brak dopasowania - sprawdź czy wszystkie się zakończyły
+    if all_tasks_completed?(results) do
+      # Wszystkie zakończone bez dopasowania - kontynuuj
+      simulate_until_match(context)
+    else
+      # Niektóre jeszcze trwają - poczekaj i spróbuj ponownie
+      process_simulation_attempts_parallel(context)
     end
   end
 
+  defp all_tasks_completed?(results) do
+    Enum.all?(results, fn {_, result} -> result != nil end)
+  end
+
   defp generate_and_check_attempt(context) do
-    case Strategies.Generator.generate_numbers(context.strategy,
-           half_random_mode: context.half_random_mode
-         ) do
+    generator_opts = [
+      half_random_mode: context.half_random_mode,
+      vip1_mode: context.vip1_mode,
+      vip1_pool: context.vip1_pool,
+      vip2_blacklist: context.vip2_blacklist
+    ]
+
+    case Strategies.Generator.generate_numbers(context.strategy, generator_opts) do
       {:ok, generated} ->
-        handle_generated_numbers(context, generated)
+        # For VIP1 mode, extract just the numbers (ignore constraints_met for matching)
+        generated_numbers =
+          if Map.has_key?(generated, :constraints_met) do
+            %{main: generated.main, euro: generated.euro}
+          else
+            generated
+          end
+
+        handle_generated_numbers(context, generated_numbers)
 
       {:error, reason} ->
         {:error, reason}
@@ -928,6 +1212,7 @@ defmodule NumbersEvolution.Simulations do
   end
 
   defp handle_unique_attempt(context, generated, updated_controller) do
+    require Logger
     # Unikalna próba - zwiększ licznik atomicznie
     new_count = AtomicCounter.increment(context.counter_table)
     # Broadcastuj tylko co 100 prób dla wydajności
@@ -940,6 +1225,13 @@ defmodule NumbersEvolution.Simulations do
 
     # Sprawdź wszystkie możliwe stopnie nagród i zlicz je
     all_tiers = calculate_all_prize_tiers(generated, context.target_numbers)
+
+    # Debug log dla jackpota
+    if 1 in all_tiers do
+      Logger.info(
+        "JACKPOT! Generated: #{inspect(generated)}, Target: #{inspect(context.target_numbers)}, Tiers: #{inspect(all_tiers)}"
+      )
+    end
 
     # Zlicz wszystkie trafione tier'y
     Enum.each(all_tiers, fn tier ->
@@ -1053,6 +1345,7 @@ defmodule NumbersEvolution.Simulations do
          duplicate_controller,
          prize_tiers_table
        ) do
+    require Logger
     simulation = Repo.get!(Simulation, simulation_id)
     duration = System.monotonic_time(:second) - start_time
 
@@ -1060,31 +1353,44 @@ defmodule NumbersEvolution.Simulations do
     duplicate_stats = SimulationDuplicateController.get_stats(duplicate_controller)
 
     # Pobierz statystyki nagród
-    prize_tiers = PrizeTiersTracker.get_all(prize_tiers_table)
-    prize_details = PrizeTiersTracker.get_details(prize_tiers_table)
+    prize_tiers_raw = PrizeTiersTracker.get_all(prize_tiers_table)
+    prize_details_raw = PrizeTiersTracker.get_details(prize_tiers_table)
+
+    # Konwertuj klucze całkowite na stringi dla JSONB
+    prize_tiers = Map.new(prize_tiers_raw, fn {k, v} -> {Integer.to_string(k), v} end)
+    prize_details = Map.new(prize_details_raw, fn {k, v} -> {Integer.to_string(k), v} end)
+
+    # Debug log
+    Logger.info("Prize tiers before save: #{inspect(prize_tiers)}")
+    Logger.info("All ETS data: #{inspect(:ets.tab2list(prize_tiers_table))}")
 
     case result do
       {:success, attempts, matched_numbers, _controller} ->
         result_data = %{
-          matched_main: matched_numbers.main,
-          matched_euro: matched_numbers.euro,
-          attempts_count: attempts,
-          duplicates_skipped: duplicate_stats.duplicates_skipped,
-          unique_attempts: attempts,
-          prize_tiers: prize_tiers,
-          prize_details: prize_details,
-          final_draw: %{
-            main_numbers: matched_numbers.main,
-            euro_numbers: matched_numbers.euro
+          "matched_main" => matched_numbers.main,
+          "matched_euro" => matched_numbers.euro,
+          "attempts_count" => attempts,
+          "duplicates_skipped" => duplicate_stats.duplicates_skipped,
+          "unique_attempts" => attempts,
+          "prize_tiers" => prize_tiers,
+          "prize_details" => prize_details,
+          "final_draw" => %{
+            "main_numbers" => matched_numbers.main,
+            "euro_numbers" => matched_numbers.euro
           }
         }
+
+        result_changeset =
+          SimulationResult.success_changeset(%SimulationResult{}, result_data)
+
+        result_struct = Ecto.Changeset.apply_changes(result_changeset)
 
         simulation
         |> Simulation.completion_changeset("success", %{
           attempts_count: attempts,
           duration_seconds: duration
         })
-        |> Ecto.Changeset.put_embed(:result, result_data)
+        |> Ecto.Changeset.put_embed(:result, result_struct)
         |> Repo.update!()
 
         # Update strategy performance score
@@ -1094,39 +1400,49 @@ defmodule NumbersEvolution.Simulations do
         status = if reason == "max_attempts", do: "max_attempts_reached", else: "timeout"
 
         result_data = %{
-          reason: "timeout",
-          limit_reached: reason,
-          attempts_count: attempts,
-          duplicates_skipped: duplicate_stats.duplicates_skipped,
-          unique_attempts: attempts,
-          prize_tiers: prize_tiers,
-          prize_details: prize_details
+          "reason" => "timeout",
+          "limit_reached" => reason,
+          "attempts_count" => attempts,
+          "duplicates_skipped" => duplicate_stats.duplicates_skipped,
+          "unique_attempts" => attempts,
+          "prize_tiers" => prize_tiers,
+          "prize_details" => prize_details
         }
+
+        result_changeset =
+          SimulationResult.timeout_changeset(%SimulationResult{}, result_data)
+
+        result_struct = Ecto.Changeset.apply_changes(result_changeset)
 
         simulation
         |> Simulation.completion_changeset(status, %{
           attempts_count: attempts,
           duration_seconds: duration
         })
-        |> Ecto.Changeset.put_embed(:result, result_data)
+        |> Ecto.Changeset.put_embed(:result, result_struct)
         |> Repo.update!()
 
       {:error, reason} ->
         result_data = %{
-          reason: "error",
-          limit_reached: "error",
-          error_message: inspect(reason),
-          duplicates_skipped: duplicate_stats.duplicates_skipped,
-          unique_attempts: 0,
-          prize_tiers: prize_tiers,
-          prize_details: prize_details
+          "reason" => "error",
+          "limit_reached" => "error",
+          "error_message" => inspect(reason),
+          "duplicates_skipped" => duplicate_stats.duplicates_skipped,
+          "unique_attempts" => 0,
+          "prize_tiers" => prize_tiers,
+          "prize_details" => prize_details
         }
+
+        result_changeset =
+          SimulationResult.timeout_changeset(%SimulationResult{}, result_data)
+
+        result_struct = Ecto.Changeset.apply_changes(result_changeset)
 
         simulation
         |> Simulation.completion_changeset("error", %{
           duration_seconds: duration
         })
-        |> Ecto.Changeset.put_embed(:result, result_data)
+        |> Ecto.Changeset.put_embed(:result, result_struct)
         |> Repo.update!()
     end
 
@@ -1168,8 +1484,8 @@ defmodule NumbersEvolution.Simulations do
       mid2 = Enum.at(sorted_list, div(count, 2))
       (mid1 + mid2) / 2.0
     else
-      # Odd number of elements - middle value
-      Enum.at(sorted_list, div(count, 2))
+      # Odd number of elements - middle value (convert to float)
+      Enum.at(sorted_list, div(count, 2)) * 1.0
     end
   end
 

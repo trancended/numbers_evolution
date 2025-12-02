@@ -143,7 +143,7 @@ defmodule NumbersEvolution.Strategies do
       String.length(prompt) < 10 ->
         {:error, :prompt_too_short}
 
-      String.length(prompt) > 500 ->
+      String.length(prompt) > 1000 ->
         {:error, :prompt_too_long}
 
       true ->

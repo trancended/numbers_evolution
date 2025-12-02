@@ -87,13 +87,14 @@ defmodule NumbersEvolution.Simulations.Simulation do
 
   @doc """
   Changeset for completing a simulation.
+
+  Note: The result embed should be added via `put_embed/3` after calling this function.
   """
   def completion_changeset(simulation, status, attrs) when status in @valid_statuses do
     simulation
     |> cast(attrs, [:attempts_count, :duration_seconds])
     |> put_change(:status, status)
     |> put_change(:completed_at, DateTime.truncate(DateTime.utc_now(), :second))
-    |> cast_embed(:result, required: status == "success")
     |> validate_completion_timing()
   end
 

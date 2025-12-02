@@ -14,6 +14,7 @@ defmodule NumbersEvolution.AIProvider.Mock do
 
     matchers = [
       # Order matters - more specific matches first
+      &match_vip1/1,
       &match_ekstremalna_hot/1,
       &match_przeciwny_trend/1,
       &match_balans_hot_cold/1,
@@ -115,6 +116,14 @@ defmodule NumbersEvolution.AIProvider.Mock do
   defp match_pelna_losowosc(normalized_prompt) do
     if String.contains?(normalized_prompt, "losow") do
       strategy_pelna_losowosc()
+    end
+  end
+
+  defp match_vip1(normalized_prompt) do
+    if String.contains?(normalized_prompt, "vip1") or
+         (String.contains?(normalized_prompt, "50%") and
+            String.contains?(normalized_prompt, "blacklist")) do
+      strategy_vip1()
     end
   end
 
@@ -353,6 +362,67 @@ defmodule NumbersEvolution.AIProvider.Mock do
           "ratio_even_odd" => [1, 1],
           "preferred" => [],
           "weights" => %{"hot" => 0.0, "random" => 1.0}
+        }
+      }
+    }
+  end
+
+  # Strategia VIP1: 50% liczb (25 głównych, 6 euro)
+  defp strategy_vip1 do
+    # Losowo wybrane 25 liczb do blacklist (wykluczamy je, zostaje 25)
+    main_blacklist = [
+      2,
+      4,
+      6,
+      8,
+      10,
+      13,
+      15,
+      17,
+      19,
+      21,
+      24,
+      26,
+      28,
+      30,
+      32,
+      35,
+      37,
+      39,
+      41,
+      43,
+      44,
+      46,
+      47,
+      49,
+      50
+    ]
+
+    # Losowo wybrane 6 liczb do blacklist (wykluczamy je, zostaje 6)
+    euro_blacklist = [2, 4, 6, 8, 10, 12]
+
+    %{
+      strategy_name: "VIP1 - 50% Liczb",
+      description:
+        "Strategia VIP1: używa tylko 50% dostępnych liczb (25 głównych z 50, 6 euro z 12). Wymaga max 2 liczby w dziesiątce i ratio 3 parzyste + 2 nieparzyste.",
+      reasoning:
+        "Strategia redukuje pulę liczb o połowę poprzez blacklistę. Z 50 głównych zostaje 25, z 12 euro zostaje 6. Dodatkowe ograniczenia: max 2 liczby w jednej dziesiątce i 3 parzyste + 2 nieparzyste dla głównych.",
+      rules: %{
+        "main_numbers" => %{
+          "blacklist" => main_blacklist,
+          "ratio_even_odd" => [3, 2],
+          "ratio_low_high" => [3, 2],
+          "preferred_hot" => [],
+          "preferred_cold" => [],
+          "weights" => %{"hot" => 0.4, "cold" => 0.1, "random" => 0.5},
+          "max_per_decade" => 2,
+          "max_consecutive" => 5
+        },
+        "euro_numbers" => %{
+          "blacklist" => euro_blacklist,
+          "ratio_even_odd" => [1, 1],
+          "preferred" => [],
+          "weights" => %{"hot" => 0.5, "random" => 0.5}
         }
       }
     }

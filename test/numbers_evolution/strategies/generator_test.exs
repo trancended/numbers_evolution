@@ -17,6 +17,7 @@ defmodule NumbersEvolution.Strategies.GeneratorTest do
             ratio_low_high: [3, 2],
             preferred_hot: [],
             preferred_cold: [],
+            blacklist: [],
             weights: %{hot: 0.5, cold: 0.0, random: 0.5},
             max_consecutive: 2,
             max_per_decade: 2
@@ -24,6 +25,7 @@ defmodule NumbersEvolution.Strategies.GeneratorTest do
           euro_numbers: %{
             ratio_even_odd: [1, 1],
             preferred: [],
+            blacklist: [],
             weights: %{hot: 0.5, random: 0.5}
           }
         }

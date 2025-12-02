@@ -222,7 +222,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <div class="form-control">
             <label class="label">
               <span class="label-text font-semibold">Opisz swoją strategię</span>
-              <span class="label-text-alt">Min 10, max 500 znaków</span>
+              <span class="label-text-alt">Min 10, max 1000 znaków</span>
             </label>
             <textarea
               id="strategy-prompt-textarea"
@@ -231,7 +231,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               placeholder="Np. Pomin połowę liczb (wszystkie parzyste), skupiamy się tylko na nieparzystych..."
               required
               minlength="10"
-              maxlength="500"
+              maxlength="1000"
               phx-hook="SetTextareaValue"
               data-value={@example_prompt}
             >{@example_prompt}</textarea>
@@ -315,6 +315,36 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               <div class="flex flex-col items-start gap-1">
                 <div class="font-semibold text-left w-full">Przeciwny Trend</div>
                 <div class="text-xs opacity-70 text-left w-full">Gra na cold numbers</div>
+              </div>
+            </button>
+
+            <button
+              data-cy="template-vip1"
+              type="button"
+              phx-click="use_strategy_template"
+              phx-value-strategy="vip1"
+              class="btn btn-sm btn-warning justify-start text-left min-h-[4rem] py-3"
+            >
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">🎰 VIP1</div>
+                <div class="text-xs opacity-70 text-left w-full">
+                  50% liczb (AI blacklist), max 2/dziesiątkę
+                </div>
+              </div>
+            </button>
+
+            <button
+              data-cy="template-vip2"
+              type="button"
+              phx-click="use_strategy_template"
+              phx-value-strategy="vip2"
+              class="btn btn-sm btn-secondary justify-start text-left min-h-[4rem] py-3"
+            >
+              <div class="flex flex-col items-start gap-1">
+                <div class="font-semibold text-left w-full">🎲 VIP2</div>
+                <div class="text-xs opacity-70 text-left w-full">
+                  50% liczb (auto przy każdej symulacji)
+                </div>
               </div>
             </button>
           </div>
@@ -481,6 +511,11 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
       <div class="form-control">
         <label class="label mb-3">
           <span class="label-text">Target draw (losowanie docelowe)</span>
+          <%= if @selected_strategy && vip_strategy?(@selected_strategy) do %>
+            <span class="label-text-alt text-warning">
+              🎯 Filtrowane dla VIP: tylko losowania z 2 niep. + 3 parz., max 2/dziesiątkę
+            </span>
+          <% end %>
         </label>
         <select
           data-cy="target-draw-select"
@@ -499,6 +534,13 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
             </option>
           <% end %>
         </select>
+        <%= if @selected_strategy && vip_strategy?(@selected_strategy) && @draws == [] do %>
+          <label class="label">
+            <span class="label-text-alt text-error">
+              ⚠️ Brak losowań spełniających ograniczenia VIP. Wybierz inną strategię.
+            </span>
+          </label>
+        <% end %>
       </div>
 
       <%= if @selected_strategy do %>
@@ -616,6 +658,31 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               </span>
             </label>
           </div>
+
+          <div class="divider"></div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer">
+              <input
+                type="checkbox"
+                id="vip1_mode_checkbox"
+                name="vip1_mode"
+                value="true"
+                class="checkbox checkbox-warning"
+              />
+              <span class="label-text ml-2 font-semibold text-warning">🎰 Tryb VIP1</span>
+            </label>
+            <label class="label">
+              <span class="label-text-alt">
+                Symulacja VIP1: losowo pomiń 50% liczb (25 głównych, 6 euro), wymagane:
+                <br />• max 2 liczby w jednej dziesiątce
+                <br />• 2 nieparzyste + 3 parzyste dla głównych <br />
+                <strong class="text-warning">
+                  Uwaga: Jeśli wylosowany zestaw nie zawiera poszukiwanych liczb, symulacja zwróci błąd - ponów próbę!
+                </strong>
+              </span>
+            </label>
+          </div>
         </div>
       </details>
 
@@ -639,6 +706,7 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <tr>
             <th>Strategia</th>
             <th>Szczegóły strategii</th>
+            <th>Pula liczb</th>
             <th>Target Draw</th>
             <th>Poszukiwane liczby</th>
             <th>Data utworzenia</th>
@@ -652,9 +720,16 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
           <%= for sim <- @simulations do %>
             <tr>
               <td class="font-medium">
-                {if Ecto.assoc_loaded?(sim.strategy) && sim.strategy,
-                  do: sim.strategy.name,
-                  else: "—"}
+                <div class="flex flex-col gap-1">
+                  <span>
+                    {if Ecto.assoc_loaded?(sim.strategy) && sim.strategy,
+                      do: sim.strategy.name,
+                      else: "—"}
+                  </span>
+                  <%= if sim.options && sim.options["vip1_mode"] do %>
+                    <span class="badge badge-warning badge-sm">🎰 VIP1</span>
+                  <% end %>
+                </div>
               </td>
               <td>
                 <%= if @strategy_pools && Map.has_key?(@strategy_pools, sim.id) do %>
@@ -663,6 +738,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                 <% else %>
                   <span>—</span>
                 <% end %>
+              </td>
+              <td>
+                <.render_numbers_pool simulation={sim} />
               </td>
               <td>
                 {if Ecto.assoc_loaded?(sim.target_draw) && sim.target_draw,
@@ -752,7 +830,8 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                   <% sim.status in ["success", "max_attempts_reached", "timeout"] && sim.result && sim.result.prize_tiers -> %>
                     <div class="flex flex-wrap gap-1">
                       <%= for tier <- 1..12 do %>
-                        <% count = Map.get(sim.result.prize_tiers, tier, 0) %>
+                        <% tier_key = Integer.to_string(tier) %>
+                        <% count = Map.get(sim.result.prize_tiers, tier_key, 0) %>
                         <div class={[
                           "badge badge-sm",
                           if(count > 0, do: "badge-primary", else: "badge-ghost")
@@ -1207,6 +1286,282 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
     """
   end
 
+  # Renders the numbers pool for a simulation - shows when pool differs from full Eurojackpot
+  attr :simulation, :map, required: true
+
+  defp render_numbers_pool(assigns) do
+    sim = assigns.simulation
+
+    # Determine which pool to show
+    pool_data = get_pool_data(sim)
+
+    assigns = assign(assigns, :pool_data, pool_data)
+
+    ~H"""
+    <%= case @pool_data do %>
+      <% {:vip1, main_pool, euro_pool} -> %>
+        <div class="text-xs space-y-1 max-w-xs">
+          <div class="font-semibold text-warning">🎰 VIP1 (losowa):</div>
+          <div>
+            <span class="font-medium text-error">
+              Główne ({length(main_pool)}/50):
+            </span>
+            <div class="flex flex-wrap gap-0.5 mt-0.5">
+              <%= for num <- main_pool |> Enum.sort() do %>
+                <span class="badge badge-xs badge-ghost">{num}</span>
+              <% end %>
+            </div>
+          </div>
+          <div>
+            <span class="font-medium text-warning">
+              Euro ({length(euro_pool)}/12):
+            </span>
+            <div class="flex flex-wrap gap-0.5 mt-0.5">
+              <%= for num <- euro_pool |> Enum.sort() do %>
+                <span class="badge badge-xs badge-ghost">{num}</span>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% {:vip2, main_available, euro_available, _main_blacklist, _euro_blacklist} -> %>
+        <div class="text-xs space-y-1 max-w-xs">
+          <div class="font-semibold text-secondary">🎲 VIP2 (auto):</div>
+          <div>
+            <span class="font-medium text-error">
+              Główne ({length(main_available)}/50):
+            </span>
+            <div class="flex flex-wrap gap-0.5 mt-0.5">
+              <%= for num <- main_available |> Enum.sort() do %>
+                <span class="badge badge-xs badge-ghost">{num}</span>
+              <% end %>
+            </div>
+          </div>
+          <div>
+            <span class="font-medium text-warning">
+              Euro ({length(euro_available)}/12):
+            </span>
+            <div class="flex flex-wrap gap-0.5 mt-0.5">
+              <%= for num <- euro_available |> Enum.sort() do %>
+                <span class="badge badge-xs badge-ghost">{num}</span>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% {:blacklist, main_available, euro_available, main_blacklist, _euro_blacklist} -> %>
+        <div class="text-xs space-y-1 max-w-xs">
+          <div class="font-semibold text-info">📋 Stała pula (blacklist):</div>
+          <div>
+            <span class="font-medium text-error">
+              Główne ({length(main_available)}/50):
+            </span>
+            <%= if length(main_blacklist) <= 10 do %>
+              <div class="flex flex-wrap gap-0.5 mt-0.5">
+                <%= for num <- main_available |> Enum.sort() do %>
+                  <span class="badge badge-xs badge-ghost">{num}</span>
+                <% end %>
+              </div>
+            <% else %>
+              <div class="text-base-content/70 mt-0.5">
+                Wykl: {Enum.join(main_blacklist |> Enum.sort() |> Enum.take(10), ", ")}
+                <%= if length(main_blacklist) > 10 do %>
+                  <span>...</span>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+          <div>
+            <span class="font-medium text-warning">
+              Euro ({length(euro_available)}/12):
+            </span>
+            <div class="flex flex-wrap gap-0.5 mt-0.5">
+              <%= for num <- euro_available |> Enum.sort() do %>
+                <span class="badge badge-xs badge-ghost">{num}</span>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% :full -> %>
+        <span class="text-base-content/40 text-xs">Pełna (50+12)</span>
+    <% end %>
+    """
+  end
+
+  # Get pool data: {:vip1, main, euro}, {:vip2, main, euro}, {:blacklist, ...}, or :full
+  defp get_pool_data(sim) do
+    get_vip1_pool(sim) || get_vip2_pool(sim) || get_blacklist_pool(sim) || :full
+  end
+
+  defp get_vip1_pool(%{options: %{"vip1_pool" => pool}}) when not is_nil(pool) do
+    {:vip1, pool["main_pool"] || [], pool["euro_pool"] || []}
+  end
+
+  defp get_vip1_pool(_), do: nil
+
+  defp get_vip2_pool(%{options: %{"vip2_blacklist" => blacklist}}) when not is_nil(blacklist) do
+    main_bl = blacklist["main_blacklist"] || []
+    euro_bl = blacklist["euro_blacklist"] || []
+    main_available = Enum.reject(1..50, &(&1 in main_bl))
+    euro_available = Enum.reject(1..12, &(&1 in euro_bl))
+    {:vip2, main_available, euro_available, main_bl, euro_bl}
+  end
+
+  defp get_vip2_pool(_), do: nil
+
+  defp get_blacklist_pool(%{strategy: strategy}) when not is_nil(strategy) do
+    if Ecto.assoc_loaded?(strategy) and has_blacklist?(strategy) do
+      main_bl = strategy.rules.main_numbers.blacklist || []
+      euro_bl = strategy.rules.euro_numbers.blacklist || []
+      main_available = Enum.reject(1..50, &(&1 in main_bl))
+      euro_available = Enum.reject(1..12, &(&1 in euro_bl))
+      {:blacklist, main_available, euro_available, main_bl, euro_bl}
+    end
+  end
+
+  defp get_blacklist_pool(_), do: nil
+
+  # Check if strategy has any blacklisted numbers
+  defp has_blacklist?(strategy) do
+    main_bl = strategy.rules.main_numbers.blacklist || []
+    euro_bl = strategy.rules.euro_numbers.blacklist || []
+    length(main_bl) > 0 or length(euro_bl) > 0
+  end
+
+  # Check if strategy is VIP (VIP1 or VIP2)
+  defp vip_strategy?(%{name: name}) do
+    name_upper = String.upcase(name)
+    String.contains?(name_upper, "VIP1") or String.contains?(name_upper, "VIP2")
+  end
+
+  defp vip_strategy?(_), do: false
+
+  # Renders pool details in the simulation details modal
+  attr :simulation, :map, required: true
+
+  defp render_pool_details_modal(assigns) do
+    sim = assigns.simulation
+    pool_data = get_pool_data(sim)
+    assigns = assign(assigns, :pool_data, pool_data)
+
+    ~H"""
+    <%= case @pool_data do %>
+      <% {:vip1, main_pool, euro_pool} -> %>
+        <div class="border-t border-base-300 pt-4">
+          <div class="alert alert-warning">
+            <span class="text-lg">🎰</span>
+            <div>
+              <h4 class="font-bold">Pula liczb (VIP1 - losowa)</h4>
+              <p class="text-sm">
+                Losowo pominięto 50% liczb. Warunki: max 2 w dziesiątce, 2 nieparzyste + 3 parzyste.
+              </p>
+            </div>
+          </div>
+          <div class="mt-3 bg-base-200 p-4 rounded-lg">
+            <h5 class="font-semibold mb-2">Startowy zestaw:</h5>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <span class="text-sm font-semibold text-error">
+                  Główne ({length(main_pool)} z 50):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- main_pool |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+              <div>
+                <span class="text-sm font-semibold text-warning">
+                  Euro ({length(euro_pool)} z 12):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- euro_pool |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% {:vip2, main_available, euro_available, main_blacklist, _euro_blacklist} -> %>
+        <div class="border-t border-base-300 pt-4">
+          <div class="alert alert-secondary">
+            <span class="text-lg">🎲</span>
+            <div>
+              <h4 class="font-bold">Pula liczb (VIP2 - auto-blacklist)</h4>
+              <p class="text-sm">
+                Automatycznie wykluczono {length(main_blacklist)} głównych i {12 -
+                  length(euro_available)} euro liczb. Warunki: max 2 w dziesiątce, 2 nieparzyste + 3 parzyste.
+              </p>
+            </div>
+          </div>
+          <div class="mt-3 bg-base-200 p-4 rounded-lg">
+            <h5 class="font-semibold mb-2">Dostępne liczby (po blacklist):</h5>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <span class="text-sm font-semibold text-error">
+                  Główne ({length(main_available)} z 50):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- main_available |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+              <div>
+                <span class="text-sm font-semibold text-warning">
+                  Euro ({length(euro_available)} z 12):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- euro_available |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% {:blacklist, main_available, euro_available, main_blacklist, _euro_blacklist} -> %>
+        <div class="border-t border-base-300 pt-4">
+          <div class="alert alert-info">
+            <span class="text-lg">📋</span>
+            <div>
+              <h4 class="font-bold">Pula liczb (stała - blacklist)</h4>
+              <p class="text-sm">
+                Strategia wyklucza {length(main_blacklist)} głównych i {12 - length(euro_available)} euro liczb.
+              </p>
+            </div>
+          </div>
+          <div class="mt-3 bg-base-200 p-4 rounded-lg">
+            <h5 class="font-semibold mb-2">Dostępne liczby:</h5>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <span class="text-sm font-semibold text-error">
+                  Główne ({length(main_available)} z 50):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- main_available |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+              <div>
+                <span class="text-sm font-semibold text-warning">
+                  Euro ({length(euro_available)} z 12):
+                </span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <%= for num <- euro_available |> Enum.sort() do %>
+                    <span class="badge badge-sm badge-outline">{num}</span>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% :full -> %>
+        <%!-- Full pool - no need to show --%>
+    <% end %>
+    """
+  end
+
   defp render_strategy_pools(pools) do
     main_pools = pools.main_numbers
     euro_pools = pools.euro_numbers
@@ -1283,6 +1638,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               </div>
             </div>
             
+    <!-- VIP1 Mode Info -->
+            <.render_pool_details_modal simulation={@simulation} />
+            
     <!-- Target numbers -->
             <%= if Ecto.assoc_loaded?(@simulation.target_draw) && @simulation.target_draw do %>
               <div class="border-t border-base-300 pt-4">
@@ -1317,9 +1675,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
               <div class="border-t border-base-300 pt-4">
                 <h4 class="font-semibold mb-3">Wyniki nagród</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <%= for {tier, count} <- @simulation.result.prize_tiers
-                        |> Enum.filter(fn {key, _} -> is_integer(key) and key in 1..12 end)
-                        |> Enum.sort_by(&elem(&1, 0)) do %>
+                  <%= for tier <- 1..12 do %>
+                    <% tier_key = Integer.to_string(tier) %>
+                    <% count = Map.get(@simulation.result.prize_tiers, tier_key, 0) %>
                     <div class={[
                       "p-4 rounded-lg border",
                       if(count > 0,
@@ -1344,12 +1702,13 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                       </div>
                       
     <!-- Show matched numbers for high tiers (1-5) -->
-                      <%= if tier in 1..5 and count > 0 and @simulation.result.prize_details && @simulation.result.prize_details[tier] do %>
+                      <%= if tier in 1..5 and count > 0 and @simulation.result.prize_details && Map.get(@simulation.result.prize_details, tier_key) do %>
+                        <% tier_details = Map.get(@simulation.result.prize_details, tier_key, []) %>
                         <div class="mt-3 space-y-2">
                           <span class="text-xs font-semibold text-base-content/70">
                             Trafione liczby:
                           </span>
-                          <%= for detail <- @simulation.result.prize_details[tier] |> Enum.take(5) do %>
+                          <%= for detail <- tier_details |> Enum.take(5) do %>
                             <div class="flex gap-3 text-xs">
                               <div class="flex items-center gap-1">
                                 <span class="text-base-content/60">Główne:</span>
@@ -1369,9 +1728,9 @@ defmodule NumbersEvolutionWeb.SectionsComponents do
                               </div>
                             </div>
                           <% end %>
-                          <%= if length(@simulation.result.prize_details[tier]) > 5 do %>
+                          <%= if length(tier_details) > 5 do %>
                             <span class="text-xs text-base-content/50">
-                              ... i {length(@simulation.result.prize_details[tier]) - 5} więcej
+                              ... i {length(tier_details) - 5} więcej
                             </span>
                           <% end %>
                         </div>

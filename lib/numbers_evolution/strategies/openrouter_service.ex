@@ -165,7 +165,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
   Generates a strategy based on a text prompt using OpenRouter AI.
 
   ## Parameters
-  - `prompt`: String user prompt (10-500 characters)
+  - `prompt`: String user prompt (10-1000 characters)
 
   ## Returns
   - `{:ok, strategy_response}` - Successfully generated strategy
@@ -215,7 +215,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
   ## Returns
   - `:ok` - Prompt is valid
   - `{:error, :prompt_too_short}` - Prompt shorter than 10 characters
-  - `{:error, :prompt_too_long}` - Prompt longer than 500 characters
+  - `{:error, :prompt_too_long}` - Prompt longer than 1000 characters
   - `{:error, :invalid_content}` - Prompt contains forbidden content
   """
   @spec validate_prompt(String.t()) :: :ok | {:error, atom()}
@@ -224,7 +224,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
       String.length(prompt) < 10 ->
         {:error, :prompt_too_short}
 
-      String.length(prompt) > 500 ->
+      String.length(prompt) > 1000 ->
         {:error, :prompt_too_long}
 
       contains_forbidden_content?(prompt) ->
@@ -247,29 +247,50 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
   - `String` - Full detailed prompt for AI
   """
   @spec build_strategy_prompt(String.t()) :: String.t()
-  def build_strategy_prompt(strategy_name) do
-    case strategy_name do
-      "tylko_nieparzyste" ->
-        "Utwórz strategię eurojackpot która całkowicie pomija wszystkie parzyste liczby główne (2,4,6,8,...50). Skup się wyłącznie na 25 nieparzystych liczbach (1,3,5,...49). Dla euro wszystkich liczb używaj normalnie. Strategia powinna mieć: ratio parzystych/nieparzystych 0:5 dla głównych, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot i 50% random, preferuj gorące liczby."
+  def build_strategy_prompt("tylko_nieparzyste"), do: strategy_prompt_tylko_nieparzyste()
+  def build_strategy_prompt("dwie_nieparzyste_trzy_parzyste"), do: strategy_prompt_dwie_trzy()
+  def build_strategy_prompt("max_dwie_w_dziesiatce"), do: strategy_prompt_max_dwie()
+  def build_strategy_prompt("balans_hot_cold"), do: strategy_prompt_balans()
+  def build_strategy_prompt("ekstremalna_hot"), do: strategy_prompt_ekstremalna_hot()
+  def build_strategy_prompt("przeciwny_trend"), do: strategy_prompt_przeciwny_trend()
+  def build_strategy_prompt("vip1"), do: strategy_prompt_vip1()
+  def build_strategy_prompt("vip2"), do: strategy_prompt_vip2()
+  def build_strategy_prompt(_), do: strategy_prompt_default()
 
-      "dwie_nieparzyste_trzy_parzyste" ->
-        "Utwórz strategię eurojackpot z precyzyjnym ratio parzystości: dokładnie 2 nieparzyste i 3 parzyste liczby główne. Dla euro zachowaj balans 1:1. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot, 20% cold, 30% random, preferuj gorące liczby 7,15,23,34,42."
+  defp strategy_prompt_tylko_nieparzyste do
+    "Utwórz strategię eurojackpot która całkowicie pomija wszystkie parzyste liczby główne (2,4,6,8,...50). Skup się wyłącznie na 25 nieparzystych liczbach (1,3,5,...49). Dla euro wszystkich liczb używaj normalnie. Strategia powinna mieć: ratio parzystych/nieparzystych 0:5 dla głównych, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot i 50% random, preferuj gorące liczby."
+  end
 
-      "max_dwie_w_dziesiatce" ->
-        "Utwórz strategię eurojackpot z ograniczeniami dystrybucyjnymi: maksymalnie 2 liczby w jednej dziesiątce (np. 1-10,11-20,etc.) i całkowity zakaz kolejnych liczb (np. nie 7,8). Skup się na gorących liczbach z ostatnich losowań. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 2 liczby z dekady, maksymalnie 1 kolejna liczba, wagi 60% hot, 20% cold, 20% random, preferuj gorące liczby 7,15,23,34,42."
+  defp strategy_prompt_dwie_trzy do
+    "Utwórz strategię eurojackpot z precyzyjnym ratio parzystości: dokładnie 2 nieparzyste i 3 parzyste liczby główne. Dla euro zachowaj balans 1:1. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 50% hot, 20% cold, 30% random, preferuj gorące liczby 7,15,23,34,42."
+  end
 
-      "balans_hot_cold" ->
-        "Utwórz zrównoważoną strategię eurojackpot balansującą trendy i losowość. Połącz gorące i zimne liczby w proporcjach 40% hot, 20% cold, 40% random. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, preferuj gorące 7,23,34 i zimne 1,50, maksymalnie 10 preferowanych liczb każdego typu."
+  defp strategy_prompt_max_dwie do
+    "Utwórz strategię eurojackpot z ograniczeniami dystrybucyjnymi: maksymalnie 2 liczby w jednej dziesiątce (np. 1-10,11-20,etc.) i całkowity zakaz kolejnych liczb (np. nie 7,8). Skup się na gorących liczbach z ostatnich losowań. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 2 liczby z dekady, maksymalnie 1 kolejna liczba, wagi 60% hot, 20% cold, 20% random, preferuj gorące liczby 7,15,23,34,42."
+  end
 
-      "ekstremalna_hot" ->
-        "Utwórz ekstremalną strategię eurojackpot skupiającą się maksymalnie na gorących liczbach z ostatnich 32 losowań. Całkowicie ignoruj zimne liczby. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, maksymalnie 3 kolejne liczby, wagi 80% hot, 0% cold, 20% random, preferuj 9 gorących liczb jak 7,12,18,23,28,34,39,42,47."
+  defp strategy_prompt_balans do
+    "Utwórz zrównoważoną strategię eurojackpot balansującą trendy i losowość. Połącz gorące i zimne liczby w proporcjach 40% hot, 20% cold, 40% random. Strategia powinna zawierać: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, preferuj gorące 7,23,34 i zimne 1,50, maksymalnie 10 preferowanych liczb każdego typu."
+  end
 
-      "przeciwny_trend" ->
-        "Utwórz strategię eurojackpot działającą odwrotnie do popularnych trendów - skup się na cold numbers (rzadko wypadających liczbach) z ostatnich 64 losowań. Strategia powinna zawierać: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 10% hot, 70% cold, 20% random, preferuj 9 zimnych liczb jak 1,5,13,17,25,31,41,45,50."
+  defp strategy_prompt_ekstremalna_hot do
+    "Utwórz ekstremalną strategię eurojackpot skupiającą się maksymalnie na gorących liczbach z ostatnich 32 losowań. Całkowicie ignoruj zimne liczby. Strategia powinna mieć: ratio parzystych/nieparzystych 2:3, niskie/wysokie 2:3, maksymalnie 5 liczb z dekady, maksymalnie 3 kolejne liczby, wagi 80% hot, 0% cold, 20% random, preferuj 9 gorących liczb jak 7,12,18,23,28,34,39,42,47."
+  end
 
-      _ ->
-        "Utwórz zrównoważoną strategię eurojackpot balansującą gorące i losowe liczby w proporcjach około 40% hot i 60% random. Strategia powinna mieć odpowiednie proporcje parzystych/nieparzystych oraz niskich/wysokich liczb."
-    end
+  defp strategy_prompt_przeciwny_trend do
+    "Utwórz strategię eurojackpot działającą odwrotnie do popularnych trendów - skup się na cold numbers (rzadko wypadających liczbach) z ostatnich 64 losowań. Strategia powinna zawierać: ratio parzystych/nieparzystych 2:3, niskie/wysokie 3:2, maksymalnie 5 liczb z dekady, bez limitu kolejnych, wagi 10% hot, 70% cold, 20% random, preferuj 9 zimnych liczb jak 1,5,13,17,25,31,41,45,50."
+  end
+
+  defp strategy_prompt_vip1 do
+    "Strategia VIP1 używa 50% liczb przez blacklist. KRYTYCZNE: blacklist main_numbers - DOKŁADNIE 25 liczb 1-50, MIX parzystych/nieparzystych (12-13 każdego typu). Przykład: [1,2,5,8,10,12,13,16,18,21,24,26,27,30,32,35,38,40,41,44,46,47,48,49,50]. Blacklist euro_numbers - DOKŁADNIE 6 liczb 1-12, też mix, np. [2,5,7,9,11,12]. Reguły: ratio parzyste/nieparzyste 3:2 główne, 1:1 euro, niskie/wysokie 3:2, max 2/dekadę, max 5 kolejnych, wagi 40% hot/10% cold/50% random główne, 50% hot/50% random euro. Preferred_hot i preferred_cold mogą być puste."
+  end
+
+  defp strategy_prompt_vip2 do
+    "Utwórz strategię eurojackpot VIP2 z PUSTYM blacklist - blacklist będzie generowany automatycznie przy każdym uruchomieniu symulacji! Strategia nazywa się VIP2 Auto-Blacklist. Opis: Automatycznie generuje losowy blacklist (25 głównych, 6 euro) przy każdym uruchomieniu symulacji. WAŻNE: blacklist dla main_numbers MUSI być pustą listą [], blacklist dla euro_numbers MUSI być pustą listą []. Strategia: ratio parzystych/nieparzystych 3:2 dla głównych i 1:1 dla euro, niskie/wysokie 3:2, maksymalnie 2 liczby z dekady, maksymalnie 5 kolejnych, wagi 40% hot, 10% cold, 50% random dla głównych, 50% hot, 50% random dla euro. preferred_hot i preferred_cold mogą być puste. To jest specjalna strategia która oznacza że blacklist zostanie wygenerowany automatycznie."
+  end
+
+  defp strategy_prompt_default do
+    "Utwórz zrównoważoną strategię eurojackpot balansującą gorące i losowe liczby w proporcjach około 40% hot i 60% random. Strategia powinna mieć odpowiednie proporcje parzystych/nieparzystych oraz niskich/wysokich liczb."
   end
 
   @doc """
@@ -418,7 +439,7 @@ defmodule NumbersEvolution.Strategies.OpenRouterService do
   defp sanitize_prompt(prompt) do
     prompt
     |> String.trim()
-    |> String.slice(0, 500)
+    |> String.slice(0, 1000)
     |> remove_forbidden_patterns()
   end
 

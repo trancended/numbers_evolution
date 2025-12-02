@@ -7,6 +7,14 @@ defmodule NumbersEvolution.Strategies.Generator do
   - Low/high ratios (for main numbers)
   - Preferred hot/cold numbers
   - Weighted pool selection (hot/cold/random)
+
+  ## VIP1 Mode
+
+  VIP1 mode is a special simulation type that:
+  1. Randomly skips 50% of numbers (25 main from 50, 6 euro from 12) before starting
+  2. Validates that the reduced pool can produce the target 1st prize numbers
+  3. Applies additional constraints: max 2 numbers per decade, 2 odd + 3 even
+  4. Saves the initial pool with the simulation for reproducibility
   """
 
   alias NumbersEvolution.Strategies.Strategy
@@ -26,12 +34,22 @@ defmodule NumbersEvolution.Strategies.Generator do
           | {:error, atom()}
   def generate_numbers(%Strategy{name: name} = strategy, opts \\ []) do
     half_random_mode = Keyword.get(opts, :half_random_mode, false)
+    vip1_mode = Keyword.get(opts, :vip1_mode, false)
+    vip1_pool = Keyword.get(opts, :vip1_pool, nil)
+    vip2_blacklist = Keyword.get(opts, :vip2_blacklist, nil)
 
-    # Check if this is the special "half random" strategy or half_random_mode is enabled
-    if String.contains?(name, "Losowo pomin połowę") or half_random_mode do
-      generate_half_random_strategy(strategy)
-    else
-      generate_numbers_standard(strategy)
+    cond do
+      vip1_mode and vip1_pool != nil ->
+        generate_vip1_numbers(vip1_pool)
+
+      vip2_blacklist != nil ->
+        generate_vip2_numbers(strategy, vip2_blacklist)
+
+      String.contains?(name, "Losowo pomin połowę") or half_random_mode ->
+        generate_half_random_strategy(strategy)
+
+      true ->
+        generate_numbers_standard(strategy)
     end
   end
 
@@ -168,6 +186,297 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
+  # ============================================================================
+  # VIP1 Mode - Special simulation with reduced pool and strict constraints
+  # ============================================================================
+
+  @doc """
+  Generates a VIP1 pool by randomly selecting 50% of all numbers.
+
+  Returns a map with:
+  - `:main_pool` - 25 randomly selected numbers from 1-50
+  - `:euro_pool` - 6 randomly selected numbers from 1-12
+
+  ## Example
+
+      iex> {:ok, pool} = generate_vip1_pool()
+      iex> length(pool.main_pool)
+      25
+      iex> length(pool.euro_pool)
+      6
+
+  """
+  @spec generate_vip1_pool() :: {:ok, %{main_pool: [pos_integer()], euro_pool: [pos_integer()]}}
+  def generate_vip1_pool do
+    all_main = 1..50 |> Enum.to_list()
+    all_euro = 1..12 |> Enum.to_list()
+
+    main_pool = Enum.take_random(all_main, 25)
+    euro_pool = Enum.take_random(all_euro, 6)
+
+    {:ok, %{main_pool: Enum.sort(main_pool), euro_pool: Enum.sort(euro_pool)}}
+  end
+
+  @doc """
+  Validates that a VIP1 pool contains all target numbers needed for 1st prize.
+
+  Returns `:ok` if all target numbers are in the pool, or `{:error, reason}` with details
+  about which numbers are missing.
+
+  ## Parameters
+
+  - `pool` - The VIP1 pool with `:main_pool` and `:euro_pool` lists
+  - `target_main` - List of 5 main target numbers
+  - `target_euro` - List of 2 euro target numbers
+
+  ## Example
+
+      iex> pool = %{main_pool: [1,2,3,4,5,...], euro_pool: [1,2,3,4,5,6]}
+      iex> validate_vip1_pool_contains_target(pool, [1,2,3,4,5], [1,2])
+      :ok
+
+      iex> validate_vip1_pool_contains_target(pool, [1,2,3,4,50], [1,11])
+      {:error, %{missing_main: [50], missing_euro: [11]}}
+
+  """
+  @spec validate_vip1_pool_contains_target(map(), [pos_integer()], [pos_integer()]) ::
+          :ok | {:error, map()}
+  def validate_vip1_pool_contains_target(pool, target_main, target_euro) do
+    main_set = MapSet.new(pool.main_pool)
+    euro_set = MapSet.new(pool.euro_pool)
+
+    missing_main = Enum.reject(target_main, &MapSet.member?(main_set, &1))
+    missing_euro = Enum.reject(target_euro, &MapSet.member?(euro_set, &1))
+
+    cond do
+      missing_main != [] and missing_euro != [] ->
+        {:error, %{missing_main: missing_main, missing_euro: missing_euro}}
+
+      missing_main != [] ->
+        {:error, %{missing_main: missing_main, missing_euro: []}}
+
+      missing_euro != [] ->
+        {:error, %{missing_main: [], missing_euro: missing_euro}}
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc """
+  Generates numbers using VIP2 mode with dynamic blacklist applied to the strategy.
+
+  VIP2 applies a runtime-generated blacklist to the strategy and generates numbers
+  with VIP1-like constraints (max 2 per decade, 2 odd + 3 even).
+  """
+  @spec generate_vip2_numbers(Strategy.t(), map()) ::
+          {:ok, %{main: [pos_integer()], euro: [pos_integer()], constraints_met: boolean()}}
+  def generate_vip2_numbers(_strategy, blacklist) do
+    # Create available pools by applying blacklist
+    main_available = Enum.reject(1..50, &(&1 in blacklist.main_blacklist))
+    euro_available = Enum.reject(1..12, &(&1 in blacklist.euro_blacklist))
+
+    # Apply VIP1 constraints to main numbers
+    {:ok, main_numbers, constraints_met} = generate_vip1_main_with_constraints(main_available)
+
+    # Generate euro numbers from available pool
+    euro_numbers = Enum.take_random(euro_available, 2)
+
+    {:ok,
+     %{
+       main: Enum.sort(main_numbers),
+       euro: Enum.sort(euro_numbers),
+       constraints_met: constraints_met
+     }}
+  end
+
+  @doc """
+  Generates numbers using the VIP1 mode with the given pre-selected pool.
+
+  VIP1 constraints:
+  - Max 2 numbers per decade (0-9, 10-19, 20-29, 30-39, 40-50)
+  - Exactly 2 odd + 3 even main numbers
+  - Euro numbers selected from the reduced pool
+
+  Returns `{:ok, result}` with `:main`, `:euro`, and `:constraints_met` fields,
+  or `{:error, reason}` if constraints cannot be satisfied.
+
+  ## Parameters
+
+  - `pool` - The VIP1 pool with `:main_pool` and `:euro_pool` lists
+
+  """
+  @spec generate_vip1_numbers(map()) ::
+          {:ok, %{main: [pos_integer()], euro: [pos_integer()], constraints_met: boolean()}}
+  def generate_vip1_numbers(pool) do
+    {:ok, main_numbers, constraints_met} = generate_vip1_main_with_constraints(pool.main_pool)
+    euro_numbers = Enum.take_random(pool.euro_pool, 2)
+
+    {:ok,
+     %{
+       main: Enum.sort(main_numbers),
+       euro: Enum.sort(euro_numbers),
+       constraints_met: constraints_met
+     }}
+  end
+
+  # Generate main numbers with VIP1 constraints: 2 odd + 3 even, max 2 per decade
+  defp generate_vip1_main_with_constraints(main_pool) do
+    # Separate odd and even numbers
+    odd_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 1))
+    even_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 0))
+
+    # Try to select exactly 2 odd and 3 even
+    selected_odd = Enum.take_random(odd_numbers, min(2, length(odd_numbers)))
+    selected_even = Enum.take_random(even_numbers, min(3, length(even_numbers)))
+
+    initial_selection = selected_odd ++ selected_even
+
+    # Check if we got the right parity ratio
+    parity_ok = length(selected_odd) == 2 and length(selected_even) == 3
+
+    # Fill to 5 if needed
+    selection =
+      if length(initial_selection) < 5 do
+        remaining_pool = main_pool -- initial_selection
+        additional = Enum.take_random(remaining_pool, 5 - length(initial_selection))
+        initial_selection ++ additional
+      else
+        initial_selection
+      end
+
+    # Apply decade constraint
+    final_selection = enforce_vip1_decade_constraint(selection, main_pool)
+
+    # Check final constraints
+    final_odd = Enum.count(final_selection, &(rem(&1, 2) == 1))
+    final_even = Enum.count(final_selection, &(rem(&1, 2) == 0))
+    decade_ok = check_decade_constraint(final_selection)
+    constraints_met = parity_ok and final_odd == 2 and final_even == 3 and decade_ok
+
+    {:ok, final_selection, constraints_met}
+  end
+
+  # Enforce max 2 per decade for VIP1, using only numbers from the pool
+  defp enforce_vip1_decade_constraint(numbers, pool) do
+    by_decade = Enum.group_by(numbers, fn n -> div(n - 1, 10) end)
+
+    # First, keep max 2 per decade from selected
+    constrained =
+      Enum.flat_map(by_decade, fn {_decade, nums} ->
+        Enum.take_random(nums, min(2, length(nums)))
+      end)
+
+    # If we need more numbers, fill from pool respecting decade limits
+    if length(constrained) < 5 do
+      fill_vip1_decade_constraint(constrained, pool, 5)
+    else
+      Enum.take(constrained, 5)
+    end
+  end
+
+  defp fill_vip1_decade_constraint(current, pool, target) do
+    if length(current) >= target do
+      current
+    else
+      current_by_decade = Enum.group_by(current, fn n -> div(n - 1, 10) end)
+
+      # Find available numbers from pool that fit decade constraints
+      available =
+        (pool -- current)
+        |> Enum.filter(fn n ->
+          decade = div(n - 1, 10)
+          existing_in_decade = Map.get(current_by_decade, decade, [])
+          length(existing_in_decade) < 2
+        end)
+
+      if available == [] do
+        # Can't satisfy constraint, return what we have + random to fill
+        remaining = (pool -- current) |> Enum.take_random(target - length(current))
+        current ++ remaining
+      else
+        new_number = Enum.random(available)
+        fill_vip1_decade_constraint([new_number | current], pool, target)
+      end
+    end
+  end
+
+  # Check if numbers satisfy decade constraint (max 2 per decade)
+  defp check_decade_constraint(numbers) do
+    numbers
+    |> Enum.group_by(fn n -> div(n - 1, 10) end)
+    |> Enum.all?(fn {_decade, nums} -> length(nums) <= 2 end)
+  end
+
+  @doc """
+  Validates if target numbers meet VIP constraints (2 odd + 3 even, max 2 per decade).
+
+  Returns `:ok` if valid, or `{:error, reasons}` with list of violated constraints.
+  """
+  @spec validate_vip_constraints(list(), list()) :: :ok | {:error, list()}
+  def validate_vip_constraints(target_main, _target_euro) do
+    parity_errors = check_vip_parity_constraint(target_main)
+    decade_errors = check_vip_decade_constraint(target_main)
+
+    errors = parity_errors ++ decade_errors
+
+    if errors == [] do
+      :ok
+    else
+      {:error, errors}
+    end
+  end
+
+  defp check_vip_parity_constraint(target_main) do
+    odd_count = Enum.count(target_main, &(rem(&1, 2) == 1))
+    even_count = Enum.count(target_main, &(rem(&1, 2) == 0))
+
+    if odd_count != 2 or even_count != 3 do
+      [
+        "Poszukiwane liczby główne muszą mieć 2 nieparzyste i 3 parzyste (masz: #{odd_count} niep., #{even_count} parz.)"
+      ]
+    else
+      []
+    end
+  end
+
+  defp check_vip_decade_constraint(target_main) do
+    by_decade = Enum.group_by(target_main, fn n -> div(n - 1, 10) end)
+
+    violations =
+      Enum.filter(by_decade, fn {_decade, nums} -> length(nums) > 2 end)
+      |> Enum.map(fn {decade, nums} ->
+        decade_range = format_decade_range(decade)
+        "Dziesiątka #{decade_range}: #{length(nums)} liczb #{inspect(nums)}"
+      end)
+
+    if violations != [] do
+      ["Maksymalnie 2 liczby w jednej dziesiątce. Przekroczenia: #{Enum.join(violations, ", ")}"]
+    else
+      []
+    end
+  end
+
+  defp format_decade_range(0), do: "1-10"
+  defp format_decade_range(1), do: "11-20"
+  defp format_decade_range(2), do: "21-30"
+  defp format_decade_range(3), do: "31-40"
+  defp format_decade_range(4), do: "41-50"
+
+  @doc """
+  Returns information about VIP1 mode constraints for display.
+  """
+  @spec vip1_constraints_info() :: map()
+  def vip1_constraints_info do
+    %{
+      pool_size: %{main: 25, euro: 6, main_total: 50, euro_total: 12},
+      parity: %{odd: 2, even: 3},
+      decade_limit: 2,
+      description:
+        "VIP1: Losowo pomiń 50% liczb (25 głównych, 6 euro), następnie losuj 2 nieparzyste + 3 parzyste, max 2 w dziesiątce"
+    }
+  end
+
   @doc """
   Returns strategy pool details showing which numbers are in hot/cold/random pools.
 
@@ -256,9 +565,15 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   defp build_main_pools(main_rules) do
     all_numbers = MapSet.new(1..50)
-    hot_set = MapSet.new(main_rules.preferred_hot || [])
-    cold_set = MapSet.new(main_rules.preferred_cold || [])
-    random_set = MapSet.difference(all_numbers, MapSet.union(hot_set, cold_set))
+    blacklist_set = MapSet.new(main_rules.blacklist || [])
+    available_numbers = MapSet.difference(all_numbers, blacklist_set)
+
+    hot_set = MapSet.new(main_rules.preferred_hot || []) |> MapSet.intersection(available_numbers)
+
+    cold_set =
+      MapSet.new(main_rules.preferred_cold || []) |> MapSet.intersection(available_numbers)
+
+    random_set = MapSet.difference(available_numbers, MapSet.union(hot_set, cold_set))
 
     %{
       hot: MapSet.to_list(hot_set),
@@ -458,8 +773,11 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   defp build_euro_pools(euro_rules) do
     all_numbers = MapSet.new(1..12)
-    hot_set = MapSet.new(euro_rules.preferred || [])
-    random_set = MapSet.difference(all_numbers, hot_set)
+    blacklist_set = MapSet.new(euro_rules.blacklist || [])
+    available_numbers = MapSet.difference(all_numbers, blacklist_set)
+
+    hot_set = MapSet.new(euro_rules.preferred || []) |> MapSet.intersection(available_numbers)
+    random_set = MapSet.difference(available_numbers, hot_set)
 
     %{
       hot: MapSet.to_list(hot_set),
