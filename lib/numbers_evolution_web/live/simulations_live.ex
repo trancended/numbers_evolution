@@ -6,6 +6,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
 
   alias NumbersEvolution.{Accounts, Draws, Simulations, Strategies}
   alias NumbersEvolution.Strategies.Generator
+  alias NumbersEvolutionWeb.SimulationHelpers
 
   import NumbersEvolutionWeb.SimulationComponents
 
@@ -739,7 +740,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
       Ecto.assoc_loaded?(sim.strategy) && sim.strategy != nil
     end)
     |> Enum.reduce(%{}, fn sim, acc ->
-      pools = Generator.get_strategy_pools(sim.strategy)
+      pools = SimulationHelpers.get_pools_for_simulation(sim)
       Map.put(acc, sim.id, pools)
     end)
   end

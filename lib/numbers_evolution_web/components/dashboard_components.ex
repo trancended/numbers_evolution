@@ -188,7 +188,6 @@ defmodule NumbersEvolutionWeb.DashboardComponents do
         <thead>
           <tr>
             <th>Strategia</th>
-            <th>Szczegóły strategii</th>
             <th>Target Draw</th>
             <th>Poszukiwane liczby</th>
             <th>Data utworzenia</th>
@@ -222,14 +221,6 @@ defmodule NumbersEvolutionWeb.DashboardComponents do
         {if Ecto.assoc_loaded?(@simulation.strategy) && @simulation.strategy,
           do: @simulation.strategy.name,
           else: "—"}
-      </td>
-      <td>
-        <%= if @strategy_pools && Map.has_key?(@strategy_pools, @simulation.id) do %>
-          {pools = Map.get(@strategy_pools, @simulation.id)
-          render_strategy_pools(pools)}
-        <% else %>
-          <span>—</span>
-        <% end %>
       </td>
       <td>
         {if Ecto.assoc_loaded?(@simulation.target_draw) && @simulation.target_draw,
@@ -359,38 +350,6 @@ defmodule NumbersEvolutionWeb.DashboardComponents do
       >
         <.icon name="hero-trash" class="size-4" /> {"Usuń"}
       </button>
-    </div>
-    """
-  end
-
-  defp render_strategy_pools(pools) do
-    main_pools = pools.main_numbers
-    euro_pools = pools.euro_numbers
-
-    assigns = %{main_pools: main_pools, euro_pools: euro_pools}
-
-    ~H"""
-    <div class="text-xs space-y-1 max-w-xs">
-      <div>
-        <span class="font-semibold text-error">Hot:</span>
-        <span class="ml-1">{Enum.join(Enum.sort(@main_pools.hot), ", ")}</span>
-      </div>
-      <div>
-        <span class="font-semibold text-info">Cold:</span>
-        <span class="ml-1">{Enum.join(Enum.sort(@main_pools.cold), ", ")}</span>
-      </div>
-      <div>
-        <span class="font-semibold text-base-content/60">Random:</span>
-        <span class="ml-1">{length(@main_pools.random)} liczb</span>
-      </div>
-      <div class="pt-1 border-t border-base-300">
-        <span class="font-semibold">Euro Hot:</span>
-        <span class="ml-1">{Enum.join(Enum.sort(@euro_pools.hot), ", ")}</span>
-      </div>
-      <div>
-        <span class="font-semibold text-base-content/60">Euro Random:</span>
-        <span class="ml-1">{length(@euro_pools.random)} liczb</span>
-      </div>
     </div>
     """
   end

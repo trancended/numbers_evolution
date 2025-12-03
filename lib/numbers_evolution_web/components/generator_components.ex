@@ -58,22 +58,39 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
 
   defp top_strategies_display(assigns) do
     ~H"""
-    <div class="card bg-base-200">
+    <div class="card bg-base-200/50 border border-base-300">
       <div class="card-body">
-        <h2 class="card-title">Top 3 Strategie</h2>
+        <h2 class="card-title text-xl flex items-center gap-2">
+          <.icon name="hero-trophy" class="size-6 text-warning" />
+          <span>Top 3 Strategie</span>
+        </h2>
         <div class="grid md:grid-cols-3 gap-4 mt-6">
           <%= for {strategy, index} <- Enum.with_index(@strategies, 1) do %>
-            <div class="card bg-base-100">
+            <div class="card bg-base-100 border-2 border-base-300 hover:border-primary transition-colors">
               <div class="card-body">
-                <div class="flex items-center gap-2">
-                  <span class="text-2xl font-bold">#{index}</span>
-                  <h3 class="font-semibold">{strategy.name}</h3>
+                <div class="flex items-start gap-3">
+                  <div class={[
+                    "flex items-center justify-center w-10 h-10 rounded-full font-bold text-lg",
+                    index == 1 && "bg-warning/20 text-warning",
+                    index == 2 && "bg-base-300 text-base-content",
+                    index == 3 && "bg-base-300/50 text-base-content/70"
+                  ]}>
+                    #{index}
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-base truncate" title={strategy.name}>
+                      {strategy.name}
+                    </h3>
+                    <div class="flex items-center gap-2 mt-2">
+                      <span class="text-xs text-base-content/60">Score:</span>
+                      <span class="text-sm font-bold text-primary">
+                        {if strategy.performance_score,
+                          do: Float.round(strategy.performance_score, 2),
+                          else: "—"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <p class="text-sm">
-                  Score: {if strategy.performance_score,
-                    do: Float.round(strategy.performance_score, 2),
-                    else: "—"}
-                </p>
               </div>
             </div>
           <% end %>
@@ -87,26 +104,29 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
 
   defp generator_form(assigns) do
     ~H"""
-    <form phx-submit="generate_coupons" class="card bg-base-100 shadow-xl">
+    <form phx-submit="generate_coupons" class="card bg-base-100 shadow-xl border-2 border-base-300">
       <div class="card-body">
-        <h2 class="card-title">Generuj propozycje</h2>
-        <div class="flex gap-6 mt-6">
-          <div class="form-control flex-1">
-            <label class="label mb-3">
-              <span class="label-text">Wybierz strategię</span>
+        <h2 class="card-title text-xl flex items-center gap-2 mb-4">
+          <.icon name="hero-sparkles" class="size-6 text-primary" />
+          <span>Generuj propozycje</span>
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+          <div class="form-control">
+            <label class="label mb-2">
+              <span class="label-text font-semibold">Wybierz strategię</span>
             </label>
-            <select name="strategy_id" class="select select-bordered" required>
+            <select name="strategy_id" class="select select-bordered w-full" required>
               <option value="" disabled selected>Wybierz strategię...</option>
               <%= for strategy <- @strategies do %>
                 <option value={strategy.id}>{strategy.name}</option>
               <% end %>
             </select>
           </div>
-          <div class="form-control flex-1">
-            <label class="label mb-3">
-              <span class="label-text">Liczba kuponów (1-10)</span>
+          <div class="form-control">
+            <label class="label mb-2">
+              <span class="label-text font-semibold">Liczba kuponów</span>
             </label>
-            <div class="w-full px-2">
+            <div class="bg-base-200/50 p-4 rounded-lg border border-base-300">
               <input
                 type="range"
                 name="coupons_count"
@@ -116,8 +136,7 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
                 max="10"
                 value="5"
                 step="1"
-                class="range range-primary range-xs"
-                style="width: 100%;"
+                class="range range-primary w-full"
                 oninput="document.getElementById('coupons_count_display').textContent = this.value"
               />
               <datalist id="coupons_tickmarks">
@@ -125,20 +144,23 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
                   <option value={i}></option>
                 <% end %>
               </datalist>
-              <div class="flex w-full justify-between text-xs mt-1">
-                <%= for _ <- 1..10 do %>
-                  <span>|</span>
+              <div class="flex w-full justify-between text-xs mt-2 px-1">
+                <%= for i <- 1..10 do %>
+                  <span class="text-base-content/40">{i}</span>
                 <% end %>
               </div>
-            </div>
-            <div class="flex justify-between text-xs mt-2 px-2">
-              <span>1</span>
-              <span id="coupons_count_display" class="font-bold text-lg text-primary">5</span>
-              <span>10</span>
+              <div class="text-center mt-3">
+                <span
+                  id="coupons_count_display"
+                  class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 font-bold text-3xl text-primary"
+                >
+                  5
+                </span>
+              </div>
             </div>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary mt-4">
+        <button type="submit" class="btn btn-primary w-full mt-6 text-base py-3 h-auto">
           <.icon name="hero-sparkles" class="size-5" /> Generuj propozycje
         </button>
       </div>
@@ -150,29 +172,52 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
 
   defp generated_coupons_display(assigns) do
     ~H"""
-    <div class="space-y-4">
-      <div class="flex justify-between items-center">
-        <h2 class="text-2xl font-bold">Wygenerowane kupony</h2>
-        <button type="button" phx-click="regenerate_coupons" class="btn btn-secondary">
+    <div class="space-y-6">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <.icon name="hero-ticket" class="size-7 text-success" />
+          <span>Wygenerowane kupony</span>
+        </h2>
+        <button
+          type="button"
+          phx-click="regenerate_coupons"
+          class="btn btn-secondary gap-2 w-full sm:w-auto"
+        >
           <.icon name="hero-arrow-path" class="size-5" /> Wylosuj inne
         </button>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4 mt-6">
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         <%= for {coupon, index} <- Enum.with_index(@coupons, 1) do %>
-          <.card>
-            <:title>Kupon {index}</:title>
-            <div class="space-y-4">
-              <div>
-                <p class="text-sm font-semibold mb-2">Główne liczby:</p>
-                <.number_ball numbers={coupon.main_numbers} type="main" size="md" />
+          <div class="card bg-base-100 border-2 border-base-300 hover:border-primary hover:shadow-lg transition-all">
+            <div class="card-body">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="card-title text-lg">Kupon {index}</h3>
+                <div class="badge badge-primary badge-lg">#{index}</div>
               </div>
-              <div>
-                <p class="text-sm font-semibold mb-2">Euro liczby:</p>
-                <.number_ball numbers={coupon.euro_numbers} type="euro" size="md" />
+              <div class="space-y-5">
+                <div>
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                    <p class="text-sm font-semibold">Główne liczby:</p>
+                  </div>
+                  <div class="flex justify-center">
+                    <.number_ball numbers={coupon.main_numbers} type="main" size="md" />
+                  </div>
+                </div>
+                <div class="divider my-2"></div>
+                <div>
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                    <p class="text-sm font-semibold">Euro liczby:</p>
+                  </div>
+                  <div class="flex justify-center">
+                    <.number_ball numbers={coupon.euro_numbers} type="euro" size="md" />
+                  </div>
+                </div>
               </div>
             </div>
-          </.card>
+          </div>
         <% end %>
       </div>
     </div>
