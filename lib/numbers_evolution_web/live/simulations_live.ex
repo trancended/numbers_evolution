@@ -135,9 +135,10 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     socket =
       if target_draw_id != "" and socket.assigns[:selected_strategy] do
         target_draw = Draws.get_draw!(target_draw_id)
+        strategy = socket.assigns.selected_strategy
         pools = socket.assigns.strategy_pools
 
-        validation_result = validate_target_in_strategy_pools(target_draw, pools)
+        validation_result = validate_target_in_strategy_pools(target_draw, pools, strategy)
 
         case validation_result do
           {:error, reason} ->
@@ -236,8 +237,16 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
 
     case Simulations.stop_simulation(user, simulation_id) do
       {:ok, _simulation} ->
+        # Clean up live tracking data and unsubscribe from PubSub
+        sim_id_string = to_string(simulation_id)
+        live_attempts = Map.delete(socket.assigns.live_attempts || %{}, sim_id_string)
+        live_prize_tiers = Map.delete(socket.assigns.live_prize_tiers || %{}, sim_id_string)
+
         socket =
           socket
+          |> assign(:live_attempts, live_attempts)
+          |> assign(:live_prize_tiers, live_prize_tiers)
+          |> unsubscribe_from_simulation(simulation_id)
           |> put_flash(:info, "Symulacja została zatrzymana")
           |> load_simulations()
 
@@ -747,19 +756,14 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
 
   # Filter draws to show only those that meet strategy constraints
   defp filter_draws_for_strategy(draws, strategy) do
-    if vip_strategy?(strategy) do
-      filter_draws_by_vip_constraints(draws)
-    else
-      draws
-    end
+    Enum.filter(draws, fn draw ->
+      draw_meets_strategy_constraints?(draw, strategy)
+    end)
   end
 
-  defp filter_draws_by_vip_constraints(draws) do
-    Enum.filter(draws, &draw_meets_vip_constraints?/1)
-  end
-
-  defp draw_meets_vip_constraints?(draw) do
-    case Generator.validate_vip_constraints(
+  defp draw_meets_strategy_constraints?(draw, strategy) do
+    case Generator.validate_strategy_constraints(
+           strategy,
            draw.numbers.main_numbers,
            draw.numbers.euro_numbers
          ) do
@@ -768,19 +772,35 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     end
   end
 
-  # Check if strategy is VIP (VIP1 or VIP2)
-  defp vip_strategy?(%{name: name}) do
-    name_upper = String.upcase(name)
-    String.contains?(name_upper, "VIP1") or String.contains?(name_upper, "VIP2")
-  end
-
   @doc """
-  Validates if target draw numbers exist in strategy pools.
+  Validates if target draw numbers exist in strategy pools and meet strategy constraints.
   """
-  def validate_target_in_strategy_pools(target_draw, strategy_pools) do
+  def validate_target_in_strategy_pools(target_draw, strategy_pools, strategy) do
     main_target = target_draw.numbers.main_numbers
     euro_target = target_draw.numbers.euro_numbers
 
+    # First check strategy constraints (even/odd ratio, blacklist, etc.)
+    case Generator.validate_strategy_constraints(strategy, main_target, euro_target) do
+      {:error, constraint_errors} ->
+        {:error, format_constraint_errors(constraint_errors)}
+
+      :ok ->
+        # Then check if numbers exist in strategy pools
+        validate_pools_contain_target(main_target, euro_target, strategy_pools)
+    end
+  end
+
+  defp format_constraint_errors(errors) do
+    """
+    ❌ Losowanie nie spełnia wymogów strategii:
+
+    #{Enum.map_join(errors, "\n", &"• #{&1}")}
+
+    Wybierz inne losowanie pasujące do strategii.
+    """
+  end
+
+  defp validate_pools_contain_target(main_target, euro_target, strategy_pools) do
     main_pools = strategy_pools.main_numbers
     euro_pools = strategy_pools.euro_numbers
 

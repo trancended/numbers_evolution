@@ -91,59 +91,66 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
 
   defp simulation_form(assigns) do
     ~H"""
-    <form phx-submit="start_simulation" class="space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="form-control">
-          <label class="label mb-2">
-            <span class="label-text font-semibold">Wybierz strategię</span>
-          </label>
-          <select
-            data-cy="strategy-select"
-            name="strategy_id"
-            class="select select-bordered w-full"
-            required
-            phx-change="strategy_changed"
-          >
-            <option value="" disabled selected>Wybierz strategię...</option>
-            <%= for strategy <- @strategies do %>
-              <option value={strategy.id}>{strategy.name}</option>
-            <% end %>
-          </select>
-        </div>
-
-        <div class="form-control">
-          <label class="label mb-2">
-            <span class="label-text font-semibold">Target draw (losowanie docelowe)</span>
-            <%= if @selected_strategy && vip_strategy?(@selected_strategy) do %>
-              <span class="label-text-alt text-warning text-xs">
-                🎯 Filtrowane dla VIP
-              </span>
-            <% end %>
-          </label>
-          <select
-            data-cy="target-draw-select"
-            name="target_draw_id"
-            class="select select-bordered w-full"
-            required
-            phx-change="target_draw_changed"
-          >
-            <option value="" disabled selected>Wybierz losowanie...</option>
-            <%= for draw <- @draws do %>
-              <option value={draw.id}>
-                {Calendar.strftime(draw.draw_date, "%Y-%m-%d")} - #{Enum.join(
-                  draw.numbers.main_numbers,
-                  ", "
-                )} | #{Enum.join(draw.numbers.euro_numbers, ", ")}
-              </option>
-            <% end %>
-          </select>
-          <%= if @selected_strategy && vip_strategy?(@selected_strategy) && @draws == [] do %>
-            <label class="label">
-              <span class="label-text-alt text-error text-xs">
-                ⚠️ Brak losowań spełniających ograniczenia VIP
+    <form phx-submit="start_simulation" class="space-y-4">
+      <%!-- Sekcja wyboru strategii i losowania --%>
+      <div class="bg-base-100/50 p-4 rounded-lg border border-base-300/50">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label mb-1.5">
+              <span class="label-text font-semibold flex items-center gap-2">
+                <.icon name="hero-rocket-launch" class="size-4 text-primary" /> Strategia
               </span>
             </label>
-          <% end %>
+            <select
+              data-cy="strategy-select"
+              name="strategy_id"
+              class="select select-bordered w-full"
+              required
+              phx-change="strategy_changed"
+            >
+              <option value="" disabled selected>Wybierz strategię...</option>
+              <%= for strategy <- @strategies do %>
+                <option value={strategy.id}>{strategy.name}</option>
+              <% end %>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label mb-1.5">
+              <span class="label-text font-semibold flex items-center gap-2">
+                <.icon name="hero-calendar" class="size-4 text-primary" /> Losowanie docelowe
+              </span>
+              <%= if @selected_strategy && vip_strategy?(@selected_strategy) do %>
+                <span class="label-text-alt text-warning text-xs font-medium">
+                  🎯 Filtrowane dla VIP
+                </span>
+              <% end %>
+            </label>
+            <select
+              data-cy="target-draw-select"
+              name="target_draw_id"
+              class="select select-bordered w-full"
+              required
+              phx-change="target_draw_changed"
+            >
+              <option value="" disabled selected>Wybierz losowanie...</option>
+              <%= for draw <- @draws do %>
+                <option value={draw.id}>
+                  {Calendar.strftime(draw.draw_date, "%Y-%m-%d")} - #{Enum.join(
+                    draw.numbers.main_numbers,
+                    ", "
+                  )} | #{Enum.join(draw.numbers.euro_numbers, ", ")}
+                </option>
+              <% end %>
+            </select>
+            <%= if @selected_strategy && vip_strategy?(@selected_strategy) && @draws == [] do %>
+              <label class="label">
+                <span class="label-text-alt text-error text-xs">
+                  ⚠️ Brak losowań spełniających ograniczenia VIP
+                </span>
+              </label>
+            <% end %>
+          </div>
         </div>
       </div>
 
@@ -162,13 +169,15 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
 
       <.simulation_options_form />
 
-      <button
-        data-cy="start-simulation-btn"
-        type="submit"
-        class="btn btn-primary w-full text-base py-3 h-auto"
-      >
-        <.icon name="hero-play" class="size-5" /> Uruchom symulację
-      </button>
+      <div class="pt-2">
+        <button
+          data-cy="start-simulation-btn"
+          type="submit"
+          class="btn btn-primary w-full h-12 text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+        >
+          <.icon name="hero-play" class="size-5" /> Uruchom symulację
+        </button>
+      </div>
     </form>
     """
   end
@@ -178,53 +187,55 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
 
   defp strategy_pools_display(assigns) do
     ~H"""
-    <div class="bg-base-200/50 border border-base-300 p-5 rounded-lg">
-      <h4 class="font-semibold mb-4 text-base flex items-center gap-2">
-        <.icon name="hero-squares-2x2" class="size-5 text-primary" />
-        <span>Komplet liczb strategii "<span class="text-primary">{@strategy.name}</span>"</span>
-      </h4>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="space-y-3">
-          <div class="font-semibold text-error mb-2 flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full bg-error"></div>
+    <div class="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 p-4 rounded-lg">
+      <div class="flex items-center gap-2 mb-3">
+        <.icon name="hero-squares-2x2" class="size-4 text-primary" />
+        <h4 class="font-semibold text-sm">
+          Komplet liczb strategii "<span class="text-primary">{@strategy.name}</span>"
+        </h4>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-base-100/70 p-3 rounded-lg space-y-2.5">
+          <div class="font-semibold text-error text-sm flex items-center gap-2">
+            <div class="w-2.5 h-2.5 rounded-full bg-error"></div>
             <span>Główne liczby (1-50)</span>
           </div>
-          <div class="space-y-2 pl-5">
-            <div class="flex flex-col gap-1">
-              <span class="font-medium text-sm">Hot:</span>
-              <div class="text-sm text-base-content/80">
+          <div class="space-y-2 pl-4 text-xs">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-semibold text-error/80">Hot:</span>
+              <div class="text-base-content/80 leading-relaxed">
                 {Enum.join(Enum.sort(@strategy_pools.main_numbers.hot), ", ")}
               </div>
             </div>
-            <div class="flex flex-col gap-1">
-              <span class="font-medium text-sm">Cold:</span>
-              <div class="text-sm text-base-content/80">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-semibold text-info">Cold:</span>
+              <div class="text-base-content/80 leading-relaxed">
                 {Enum.join(Enum.sort(@strategy_pools.main_numbers.cold), ", ")}
               </div>
             </div>
-            <div class="flex flex-col gap-1">
-              <span class="font-medium text-sm">Random:</span>
-              <div class="text-sm text-base-content/60">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-medium text-base-content/60">Random:</span>
+              <div class="text-base-content/60">
                 {length(@strategy_pools.main_numbers.random)} liczb (pozostałe)
               </div>
             </div>
           </div>
         </div>
-        <div class="space-y-3">
-          <div class="font-semibold text-warning mb-2 flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full bg-warning"></div>
+        <div class="bg-base-100/70 p-3 rounded-lg space-y-2.5">
+          <div class="font-semibold text-warning text-sm flex items-center gap-2">
+            <div class="w-2.5 h-2.5 rounded-full bg-warning"></div>
             <span>Liczby Euro (1-12)</span>
           </div>
-          <div class="space-y-2 pl-5">
-            <div class="flex flex-col gap-1">
-              <span class="font-medium text-sm">Hot:</span>
-              <div class="text-sm text-base-content/80">
+          <div class="space-y-2 pl-4 text-xs">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-semibold text-warning/80">Hot:</span>
+              <div class="text-base-content/80 leading-relaxed">
                 {Enum.join(Enum.sort(@strategy_pools.euro_numbers.hot), ", ")}
               </div>
             </div>
-            <div class="flex flex-col gap-1">
-              <span class="font-medium text-sm">Random:</span>
-              <div class="text-sm text-base-content/60">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-medium text-base-content/60">Random:</span>
+              <div class="text-base-content/60">
                 {length(@strategy_pools.euro_numbers.random)} liczb (pozostałe)
               </div>
             </div>
@@ -237,88 +248,96 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
 
   defp simulation_options_form(assigns) do
     ~H"""
-    <div class="space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="form-control">
-          <label class="label mb-2">
-            <span class="label-text font-semibold">Maksymalna liczba prób</span>
-          </label>
-          <input
-            type="number"
-            name="max_attempts"
-            class="input input-bordered w-full"
-            placeholder="10000000"
-            min="1000"
-            max="999999999"
-          />
-          <label class="label">
-            <span class="label-text-alt text-xs text-base-content/60">
-              Domyślnie: 10,000,000 (maksymalnie: 999,999,999)
-            </span>
-          </label>
+    <div class="space-y-3">
+      <%!-- Parametry podstawowe --%>
+      <div class="bg-base-100/50 p-4 rounded-lg border border-base-300/50">
+        <div class="flex items-center gap-2 mb-3">
+          <.icon name="hero-cog-6-tooth" class="size-4 text-primary" />
+          <h4 class="font-semibold text-sm">Parametry symulacji</h4>
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label mb-1.5">
+              <span class="label-text text-sm font-medium">Maksymalna liczba prób</span>
+            </label>
+            <input
+              type="number"
+              name="max_attempts"
+              class="input input-bordered w-full input-sm"
+              placeholder="10000000"
+              min="1000"
+              max="999999999"
+            />
+            <label class="label py-1">
+              <span class="label-text-alt text-xs text-base-content/60">
+                Domyślnie: 10,000,000
+              </span>
+            </label>
+          </div>
 
-        <div class="form-control">
-          <label class="label mb-2">
-            <span class="label-text font-semibold">Timeout (sekundy)</span>
-          </label>
-          <input
-            type="number"
-            name="timeout_seconds"
-            class="input input-bordered w-full"
-            placeholder="3600"
-            min="10"
-            max="86400"
-          />
-          <label class="label">
-            <span class="label-text-alt text-xs text-base-content/60">
-              Domyślnie: 3600s (1 godzina, maksymalnie: 86400s / 24h)
-            </span>
-          </label>
+          <div class="form-control">
+            <label class="label mb-1.5">
+              <span class="label-text text-sm font-medium">Timeout (sekundy)</span>
+            </label>
+            <input
+              type="number"
+              name="timeout_seconds"
+              class="input input-bordered w-full input-sm"
+              placeholder="3600"
+              min="10"
+              max="86400"
+            />
+            <label class="label py-1">
+              <span class="label-text-alt text-xs text-base-content/60">
+                Domyślnie: 3600s (1 godz.)
+              </span>
+            </label>
+          </div>
         </div>
       </div>
-
-      <details class="collapse collapse-arrow bg-base-200/50 border border-base-300 rounded-lg">
-        <summary class="collapse-title font-semibold text-base">
-          <.icon name="hero-adjustments-horizontal" class="size-5 inline mr-2" /> Opcje zaawansowane
+      <%!-- Opcje zaawansowane --%>
+      <details class="collapse collapse-arrow bg-base-100/30 border border-base-300/50 rounded-lg hover:bg-base-100/50 transition-colors duration-200">
+        <summary class="collapse-title font-semibold text-sm min-h-0 py-3">
+          <.icon name="hero-adjustments-horizontal" class="size-4 inline mr-2 text-primary" />
+          Opcje zaawansowane
         </summary>
-        <div class="collapse-content space-y-6 pt-4">
-          <div class="bg-base-100 p-4 rounded-lg border border-base-300">
+        <div class="collapse-content space-y-3 pt-2 pb-4">
+          <div class="bg-base-100 p-3 rounded-lg border border-base-300/70 hover:border-primary/30 transition-colors duration-200">
             <label class="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 id="half_random_mode_checkbox"
                 name="half_random_mode"
                 value="true"
-                class="checkbox checkbox-primary mt-1"
+                class="checkbox checkbox-primary checkbox-sm mt-0.5"
                 phx-hook="HalfRandomMode"
               />
               <div class="flex-1">
-                <div class="font-medium mb-1">Losowo pomin połowę</div>
-                <div class="text-sm text-base-content/70">
+                <div class="font-semibold text-sm mb-1">Losowo pomin połowę</div>
+                <div class="text-xs text-base-content/70 leading-relaxed">
                   Redukuje pulę liczb głównych z 50 do 25 przed generowaniem kombinacji
                 </div>
               </div>
             </label>
           </div>
 
-          <div class="bg-warning/10 p-4 rounded-lg border border-warning/30">
+          <div class="bg-warning/10 p-3 rounded-lg border border-warning/30 hover:border-warning/50 transition-colors duration-200">
             <label class="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 id="vip1_mode_checkbox"
                 name="vip1_mode"
                 value="true"
-                class="checkbox checkbox-warning mt-1"
+                class="checkbox checkbox-warning checkbox-sm mt-0.5"
               />
               <div class="flex-1">
-                <div class="font-semibold text-warning mb-2 flex items-center gap-2">
+                <div class="font-semibold text-warning text-sm mb-1.5 flex items-center gap-2">
                   🎰 Tryb VIP1
                 </div>
-                <div class="text-sm text-base-content/80 space-y-1">
+                <div class="text-xs text-base-content/80 space-y-1 leading-relaxed">
                   <p>Symulacja VIP1: losowo pomiń 50% liczb (25 głównych, 6 euro)</p>
-                  <p class="font-medium">Wymagania:</p>
-                  <ul class="list-disc list-inside pl-2 space-y-0.5">
+                  <p class="font-medium mt-1.5">Wymagania:</p>
+                  <ul class="list-disc list-inside pl-1.5 space-y-0.5">
                     <li>Max 2 liczby w jednej dziesiątce</li>
                     <li>2 nieparzyste + 3 parzyste dla głównych</li>
                   </ul>
