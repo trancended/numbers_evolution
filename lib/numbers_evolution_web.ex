@@ -86,6 +86,8 @@ defmodule NumbersEvolutionWeb do
       import Phoenix.HTML
       # Core UI components
       import NumbersEvolutionWeb.CoreComponents
+      # Shared components (number_ball, status_indicator, format helpers)
+      import NumbersEvolutionWeb.SharedComponents
 
       # Common modules used in templates
       alias NumbersEvolutionWeb.Layouts

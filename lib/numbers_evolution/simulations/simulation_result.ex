@@ -90,7 +90,7 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
     ])
     |> validate_required([:reason, :limit_reached])
     |> validate_inclusion(:reason, ~w(timeout error))
-    |> validate_inclusion(:limit_reached, ~w(max_attempts time_limit))
+    |> validate_inclusion(:limit_reached, ~w(max_attempts time_limit error))
     |> validate_number(:duplicates_skipped, greater_than_or_equal_to: 0)
     |> validate_number(:unique_attempts, greater_than_or_equal_to: 0)
   end

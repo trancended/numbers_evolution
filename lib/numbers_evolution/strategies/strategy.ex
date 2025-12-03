@@ -62,7 +62,7 @@ defmodule NumbersEvolution.Strategies.Strategy do
     |> validate_length(:description, max: 1000)
     |> validate_inclusion(:type, @valid_types)
     |> validate_inclusion(:status, @valid_statuses)
-    |> validate_length(:ai_prompt, max: 500)
+    |> validate_length(:ai_prompt, max: 1000)
     |> cast_embed(:rules, required: true)
     |> validate_ai_prompt()
     |> assoc_constraint(:user)
