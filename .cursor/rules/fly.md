@@ -1,11 +1,5 @@
 # Fly.io Deployment Rules - Numbers Evolution
 
-## Timeline
-- MVP1: Local development only
-- Post-MVP1: Deploy to Fly.io
-- No domain purchase required for MVP
-- Deployment progressive: local → production
-
 ## Configuration
 - Use `fly.toml` for application configuration
 - Configure `[http_service]` section for scaling
