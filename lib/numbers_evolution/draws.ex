@@ -73,16 +73,12 @@ defmodule NumbersEvolution.Draws do
   """
   @spec get_latest_draw(String.t()) :: Draw.t() | nil
   def get_latest_draw(game_type) when is_binary(game_type) do
-    game_type_atom = String.to_existing_atom(game_type)
-
     from(d in Draw,
-      where: d.game_type == ^game_type_atom,
+      where: d.game_type == ^game_type,
       order_by: [desc: d.draw_date],
       limit: 1
     )
     |> Repo.one()
-  rescue
-    ArgumentError -> nil
   end
 
   @doc """
@@ -96,16 +92,12 @@ defmodule NumbersEvolution.Draws do
   """
   @spec recent_draws(String.t(), pos_integer()) :: [Draw.t()]
   def recent_draws(game_type, limit \\ 32) when is_binary(game_type) do
-    game_type_atom = String.to_existing_atom(game_type)
-
     from(d in Draw,
-      where: d.game_type == ^game_type_atom,
+      where: d.game_type == ^game_type,
       order_by: [desc: d.draw_date],
       limit: ^limit
     )
     |> Repo.all()
-  rescue
-    ArgumentError -> []
   end
 
   @doc """
@@ -196,10 +188,7 @@ defmodule NumbersEvolution.Draws do
   defp filter_by_game_type(query, nil), do: query
 
   defp filter_by_game_type(query, game_type) when is_binary(game_type) do
-    game_type_atom = String.to_existing_atom(game_type)
-    from(d in query, where: d.game_type == ^game_type_atom)
-  rescue
-    ArgumentError -> query
+    from(d in query, where: d.game_type == ^game_type)
   end
 
   defp filter_by_game_type(query, _), do: query

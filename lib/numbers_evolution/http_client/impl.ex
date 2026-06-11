@@ -9,4 +9,9 @@ defmodule NumbersEvolution.HTTPClient.Impl do
   def post(url, opts) do
     Req.post(url, opts)
   end
+
+  @impl true
+  def get(url, opts) do
+    Req.get(url, opts)
+  end
 end

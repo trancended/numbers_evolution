@@ -6,4 +6,5 @@ defmodule NumbersEvolution.HTTPClient do
   """
 
   @callback post(String.t(), keyword()) :: {:ok, map()} | {:error, any()}
+  @callback get(String.t(), keyword()) :: {:ok, map()} | {:error, any()}
 end
