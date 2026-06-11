@@ -3,6 +3,7 @@ defmodule NumbersEvolutionWeb.SimulationHelpers do
   Shared helper functions for simulation-related operations.
   """
 
+  alias NumbersEvolution.Games
   alias NumbersEvolution.Strategies.Generator
 
   @doc """
@@ -18,6 +19,20 @@ defmodule NumbersEvolutionWeb.SimulationHelpers do
 
       true ->
         get_standard_pools(sim)
+    end
+  end
+
+  @doc """
+  Resolves the game config for a simulation from its target draw
+  (falls back to the default game when the draw is not loaded).
+  """
+  def simulation_game(sim) do
+    case sim do
+      %{target_draw: %{game_type: game_type}} when is_binary(game_type) ->
+        if Games.supported?(game_type), do: Games.get!(game_type), else: Games.default()
+
+      _ ->
+        Games.default()
     end
   end
 
@@ -56,11 +71,18 @@ defmodule NumbersEvolutionWeb.SimulationHelpers do
   end
 
   defp get_vip2_pools(sim) do
+    game = simulation_game(sim)
     blacklist = sim.options["vip2_blacklist"]
     main_blacklist = blacklist["main_blacklist"] || []
     euro_blacklist = blacklist["euro_blacklist"] || []
-    main_available = Enum.reject(1..50, &(&1 in main_blacklist))
-    euro_available = Enum.reject(1..12, &(&1 in euro_blacklist))
+    main_available = Enum.reject(game.main.min..game.main.max, &(&1 in main_blacklist))
+
+    euro_available =
+      if game.bonus.count > 0 do
+        Enum.reject(game.bonus.min..game.bonus.max, &(&1 in euro_blacklist))
+      else
+        []
+      end
 
     build_pools_from_available(sim.strategy.rules, main_available, euro_available)
   end
@@ -74,7 +96,7 @@ defmodule NumbersEvolutionWeb.SimulationHelpers do
   end
 
   defp get_standard_pools(sim) do
-    Generator.get_strategy_pools(sim.strategy)
+    Generator.get_strategy_pools(sim.strategy, game: simulation_game(sim))
   end
 
   defp filter_preferred_hot(rules, main_available) do

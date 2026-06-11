@@ -8,6 +8,7 @@ defmodule NumbersEvolution.Draws.Draw do
   import Ecto.Changeset
 
   alias NumbersEvolution.Draws.DrawNumbers
+  alias NumbersEvolution.Games
   alias NumbersEvolution.Simulations.Simulation
 
   @type t :: %__MODULE__{
@@ -43,14 +44,36 @@ defmodule NumbersEvolution.Draws.Draw do
   Changeset for creating or updating a draw.
   """
   def changeset(draw, attrs) do
-    draw
-    |> cast(attrs, [:draw_date, :game_type, :source])
-    |> validate_required([:draw_date, :game_type])
-    |> validate_inclusion(:game_type, @valid_game_types)
-    |> validate_inclusion(:source, @valid_sources)
-    |> cast_embed(:numbers, required: true)
+    changeset =
+      draw
+      |> cast(attrs, [:draw_date, :game_type, :source])
+      |> validate_required([:draw_date, :game_type])
+      |> validate_inclusion(:game_type, @valid_game_types)
+      |> validate_inclusion(:source, @valid_sources)
+
+    game_id = numbers_game_id(changeset)
+
+    changeset
+    |> cast_embed(:numbers,
+      required: true,
+      with: fn numbers, numbers_attrs ->
+        DrawNumbers.changeset(numbers, numbers_attrs, game_id)
+      end
+    )
     |> validate_draw_date()
     |> unique_constraint([:game_type, :draw_date], name: :draws_game_date_unique)
+  end
+
+  # Numbers are validated against the draw's game; game types without a
+  # configuration (multi_multi) keep the historical default format
+  defp numbers_game_id(changeset) do
+    case get_field(changeset, :game_type) do
+      game_type when is_binary(game_type) ->
+        if Games.supported?(game_type), do: game_type, else: Games.default_id()
+
+      _ ->
+        Games.default_id()
+    end
   end
 
   defp validate_draw_date(changeset) do

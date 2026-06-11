@@ -2,7 +2,8 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]  # Run full pipeline (including E2E) only on main
+    branches: [ main ]  # Pushes to main run unit tests only; E2E is manual
+  workflow_dispatch:    # Manual trigger - runs the full pipeline including E2E
 
 env:
   MIX_ENV: test
@@ -95,11 +96,13 @@ jobs:
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5436/numbers_evolution_test
 
-  # E2E tests run only on main branch after unit tests pass
+  # E2E tests are manual-only (not required): run via "Run workflow" on this
+  # pipeline or via the dedicated e2e.yml workflow
   e2e:
-    name: E2E Tests (Main branch only)
+    name: E2E Tests (Manual only)
     runs-on: ubuntu-22.04
     needs: test
+    if: github.event_name == 'workflow_dispatch'
 
     services:
       postgres:

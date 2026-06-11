@@ -17,6 +17,7 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
   """
   attr :top_strategies, :list, required: true
   attr :generated_coupons, :list, default: []
+  attr :selected_game, :string, default: nil
 
   def generator_section(assigns) do
     ~H"""
@@ -40,7 +41,7 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
         </.empty_state>
       <% else %>
         <.top_strategies_display strategies={@top_strategies} />
-        <.generator_form strategies={@top_strategies} />
+        <.generator_form strategies={@top_strategies} selected_game={@selected_game} />
 
         <%= if @generated_coupons != [] do %>
           <.generated_coupons_display coupons={@generated_coupons} />
@@ -101,8 +102,16 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
   end
 
   attr :strategies, :list, required: true
+  attr :selected_game, :string, default: nil
 
   defp generator_form(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :selected_game,
+        assigns.selected_game || NumbersEvolution.Games.default_id()
+      )
+
     ~H"""
     <form phx-submit="generate_coupons" class="card bg-base-100 shadow-xl border-2 border-base-300">
       <div class="card-body">
@@ -111,6 +120,16 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
           <span>Generuj propozycje</span>
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+          <div class="form-control">
+            <label class="label mb-2">
+              <span class="label-text font-semibold">Gra</span>
+            </label>
+            <select name="game_type" class="select select-bordered w-full">
+              <%= for {label, id} <- NumbersEvolution.Games.select_options() do %>
+                <option value={id} selected={id == @selected_game}>{label}</option>
+              <% end %>
+            </select>
+          </div>
           <div class="form-control">
             <label class="label mb-2">
               <span class="label-text font-semibold">Wybierz strategię</span>
@@ -205,16 +224,18 @@ defmodule NumbersEvolutionWeb.GeneratorComponents do
                     <.number_ball numbers={coupon.main_numbers} type="main" size="md" />
                   </div>
                 </div>
-                <div class="divider my-2"></div>
-                <div>
-                  <div class="flex items-center gap-2 mb-3">
-                    <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
-                    <p class="text-sm font-semibold">Euro liczby:</p>
+                <%= if coupon.euro_numbers != [] do %>
+                  <div class="divider my-2"></div>
+                  <div>
+                    <div class="flex items-center gap-2 mb-3">
+                      <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                      <p class="text-sm font-semibold">Euro liczby:</p>
+                    </div>
+                    <div class="flex justify-center">
+                      <.number_ball numbers={coupon.euro_numbers} type="euro" size="md" />
+                    </div>
                   </div>
-                  <div class="flex justify-center">
-                    <.number_ball numbers={coupon.euro_numbers} type="euro" size="md" />
-                  </div>
-                </div>
+                <% end %>
               </div>
             </div>
           </div>

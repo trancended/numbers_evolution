@@ -24,6 +24,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
   attr :live_prize_tiers, :map, default: %{}
   attr :strategy_pools, :map, default: %{}
   attr :selected_strategy, :any, default: nil
+  attr :selected_game, :string, default: nil
   attr :target_validation_error, :string, default: nil
 
   def simulations_section(assigns) do
@@ -51,6 +52,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
             strategies={@strategies}
             draws={@draws}
             selected_strategy={@selected_strategy}
+            selected_game={@selected_game}
             strategy_pools={@strategy_pools}
             target_validation_error={@target_validation_error}
           />
@@ -86,15 +88,41 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
   attr :strategies, :list, required: true
   attr :draws, :list, required: true
   attr :selected_strategy, :any, default: nil
+  attr :selected_game, :string, default: nil
   attr :strategy_pools, :map, default: %{}
   attr :target_validation_error, :string, default: nil
 
   defp simulation_form(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :selected_game,
+        assigns.selected_game || NumbersEvolution.Games.default_id()
+      )
+
     ~H"""
     <form phx-submit="start_simulation" class="space-y-4">
-      <%!-- Sekcja wyboru strategii i losowania --%>
+      <%!-- Sekcja wyboru gry, strategii i losowania --%>
       <div class="bg-base-100/50 p-4 rounded-lg border border-base-300/50">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="form-control">
+            <label class="label mb-1.5">
+              <span class="label-text font-semibold flex items-center gap-2">
+                <.icon name="hero-trophy" class="size-4 text-primary" /> Gra
+              </span>
+            </label>
+            <select
+              data-cy="game-select"
+              name="game_type"
+              class="select select-bordered w-full"
+              phx-change="game_changed"
+            >
+              <%= for {label, id} <- NumbersEvolution.Games.select_options() do %>
+                <option value={id} selected={id == @selected_game}>{label}</option>
+              <% end %>
+            </select>
+          </div>
+
           <div class="form-control">
             <label class="label mb-1.5">
               <span class="label-text font-semibold flex items-center gap-2">
@@ -139,7 +167,8 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                   {Calendar.strftime(draw.draw_date, "%Y-%m-%d")} - #{Enum.join(
                     draw.numbers.main_numbers,
                     ", "
-                  )} | #{Enum.join(draw.numbers.euro_numbers, ", ")}
+                  )}{if draw.numbers.euro_numbers != [],
+                    do: " | #" <> Enum.join(draw.numbers.euro_numbers, ", ")}
                 </option>
               <% end %>
             </select>
@@ -315,7 +344,8 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
               <div class="flex-1">
                 <div class="font-semibold text-sm mb-1">Losowo pomin połowę</div>
                 <div class="text-xs text-base-content/70 leading-relaxed">
-                  Redukuje pulę liczb głównych z 50 do 25 przed generowaniem kombinacji
+                  Redukuje pulę liczb głównych o połowę przed generowaniem kombinacji
+                  (Eurojackpot: 50→25, Lotto: 49→25)
                 </div>
               </div>
             </label>
@@ -335,11 +365,14 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                   🎰 Tryb VIP1
                 </div>
                 <div class="text-xs text-base-content/80 space-y-1 leading-relaxed">
-                  <p>Symulacja VIP1: losowo pomiń 50% liczb (25 głównych, 6 euro)</p>
+                  <p>
+                    Symulacja VIP1: losowo pomiń 50% liczb
+                    (Eurojackpot: 25 głównych + 6 euro, Lotto: 25 głównych)
+                  </p>
                   <p class="font-medium mt-1.5">Wymagania:</p>
                   <ul class="list-disc list-inside pl-1.5 space-y-0.5">
                     <li>Max 2 liczby w jednej dziesiątce</li>
-                    <li>2 nieparzyste + 3 parzyste dla głównych</li>
+                    <li>Eurojackpot: 2 nieparzyste + 3 parzyste, Lotto: 3 + 3</li>
                   </ul>
                   <div class="mt-2 p-2 bg-warning/20 rounded text-xs font-medium">
                     ⚠️ Uwaga: Jeśli wylosowany zestaw nie zawiera poszukiwanych liczb, symulacja zwróci błąd - ponów próbę!
@@ -365,14 +398,15 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                 <div class="text-xs text-base-content/80 leading-relaxed">
                   Losowo wyklucza część liczb przed startem - blacklist nigdy nie blokuje
                   poszukiwanych liczb. Działa dla każdej strategii.
-                  Presety: VIP2 = 25/6, VIP3 (agresywny) = 35/8.
+                  Presety (Eurojackpot): VIP2 = 25/6, VIP3 (agresywny) = 35/8.
+                  Puste pola = domyślnie połowa puli danej gry.
                 </div>
               </div>
             </label>
             <div class="grid grid-cols-2 gap-3 mt-3 pl-8">
               <div class="form-control">
                 <label class="label py-0.5">
-                  <span class="label-text-alt text-xs">Wykluczone główne (0-45)</span>
+                  <span class="label-text-alt text-xs">Wykluczone główne</span>
                 </label>
                 <input
                   type="number"
@@ -385,7 +419,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
               </div>
               <div class="form-control">
                 <label class="label py-0.5">
-                  <span class="label-text-alt text-xs">Wykluczone euro (0-10)</span>
+                  <span class="label-text-alt text-xs">Wykluczone euro</span>
                 </label>
                 <input
                   type="number"
@@ -516,7 +550,10 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                 size="xs"
               />
             </div>
-            <div class="flex flex-wrap gap-1">
+            <div
+              :if={@simulation.target_draw.numbers.euro_numbers != []}
+              class="flex flex-wrap gap-1"
+            >
               <.number_ball
                 numbers={@simulation.target_draw.numbers.euro_numbers}
                 type="euro"
@@ -588,6 +625,13 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
   attr :live_prize_tiers, :map, required: true
 
   defp prize_tiers_display(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :game,
+        NumbersEvolutionWeb.SimulationHelpers.simulation_game(assigns.simulation)
+      )
+
     ~H"""
     <%= cond do %>
       <% @simulation.status == "running" && @live_prize_tiers -> %>
@@ -595,7 +639,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
         <%= if Map.has_key?(@live_prize_tiers, sim_id_string) do %>
           <% prize_tiers = Map.get(@live_prize_tiers, sim_id_string) %>
           <div class="grid grid-cols-2 gap-x-2 gap-y-1">
-            <%= for tier <- 1..12 do %>
+            <%= for tier <- tier_numbers(@game) do %>
               <% count = Map.get(prize_tiers, tier, 0) %>
               <div class={[
                 "flex items-center justify-between px-2 py-0.5 rounded text-xs",
@@ -604,7 +648,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                   else: "bg-base-200/50 text-base-content/40"
                 )
               ]}>
-                <span class="font-mono">{tier}°{format_prize_description(tier)}</span>
+                <span class="font-mono">{tier}°{format_prize_description(tier, @game)}</span>
                 <span class="font-bold ml-2">{count}</span>
               </div>
             <% end %>
@@ -614,7 +658,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
         <% end %>
       <% @simulation.status in ["success", "max_attempts_reached", "timeout"] && @simulation.result && @simulation.result.prize_tiers -> %>
         <div class="grid grid-cols-2 gap-x-2 gap-y-1">
-          <%= for tier <- 1..12 do %>
+          <%= for tier <- tier_numbers(@game) do %>
             <% tier_key = Integer.to_string(tier) %>
             <% count = Map.get(@simulation.result.prize_tiers, tier_key, 0) %>
             <div class={[
@@ -624,7 +668,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                 else: "bg-base-200/50 text-base-content/40"
               )
             ]}>
-              <span class="font-mono">{tier}°{format_prize_description(tier)}</span>
+              <span class="font-mono">{tier}°{format_prize_description(tier, @game)}</span>
               <span class="font-bold ml-2">{count}</span>
             </div>
           <% end %>
@@ -823,27 +867,36 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
 
   defp get_vip1_pool(_), do: nil
 
-  defp get_vip2_pool(%{options: %{"vip2_blacklist" => blacklist}}) when not is_nil(blacklist) do
+  defp get_vip2_pool(%{options: %{"vip2_blacklist" => blacklist}} = sim)
+       when not is_nil(blacklist) do
+    game = NumbersEvolutionWeb.SimulationHelpers.simulation_game(sim)
     main_bl = blacklist["main_blacklist"] || []
     euro_bl = blacklist["euro_blacklist"] || []
-    main_available = Enum.reject(1..50, &(&1 in main_bl))
-    euro_available = Enum.reject(1..12, &(&1 in euro_bl))
+    main_available = Enum.reject(game.main.min..game.main.max, &(&1 in main_bl))
+    euro_available = bonus_available(game, euro_bl)
     {:vip2, main_available, euro_available, main_bl, euro_bl}
   end
 
   defp get_vip2_pool(_), do: nil
 
-  defp get_blacklist_pool(%{strategy: strategy}) when not is_nil(strategy) do
+  defp get_blacklist_pool(%{strategy: strategy} = sim) when not is_nil(strategy) do
     if Ecto.assoc_loaded?(strategy) and has_blacklist?(strategy) do
+      game = NumbersEvolutionWeb.SimulationHelpers.simulation_game(sim)
       main_bl = strategy.rules.main_numbers.blacklist || []
       euro_bl = strategy.rules.euro_numbers.blacklist || []
-      main_available = Enum.reject(1..50, &(&1 in main_bl))
-      euro_available = Enum.reject(1..12, &(&1 in euro_bl))
+      main_available = Enum.reject(game.main.min..game.main.max, &(&1 in main_bl))
+      euro_available = bonus_available(game, euro_bl)
       {:blacklist, main_available, euro_available, main_bl, euro_bl}
     end
   end
 
   defp get_blacklist_pool(_), do: nil
+
+  defp bonus_available(%{bonus: %{count: 0}}, _euro_bl), do: []
+
+  defp bonus_available(game, euro_bl) do
+    Enum.reject(game.bonus.min..game.bonus.max, &(&1 in euro_bl))
+  end
 
   defp has_blacklist?(strategy) do
     main_bl = strategy.rules.main_numbers.blacklist || []
@@ -973,7 +1026,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                       />
                     </div>
                   </div>
-                  <div>
+                  <div :if={@simulation.target_draw.numbers.euro_numbers != []}>
                     <span class="text-sm font-semibold">Euro:</span>
                     <div class="flex gap-1 mt-1">
                       <.number_ball
@@ -990,8 +1043,9 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
             <%= if @simulation.result && @simulation.result.prize_tiers do %>
               <div class="border-t border-base-300 pt-4">
                 <h4 class="font-semibold mb-3">Wyniki nagród</h4>
+                <% details_game = NumbersEvolutionWeb.SimulationHelpers.simulation_game(@simulation) %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <%= for tier <- 1..12 do %>
+                  <%= for tier <- tier_numbers(details_game) do %>
                     <% tier_key = Integer.to_string(tier) %>
                     <% count = Map.get(@simulation.result.prize_tiers, tier_key, 0) %>
                     <div class={[
@@ -1005,7 +1059,8 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                         <div class="flex flex-col">
                           <span class="font-semibold text-sm">
                             {tier}° nagroda {NumbersEvolutionWeb.SharedComponents.format_prize_description(
-                              tier
+                              tier,
+                              details_game
                             )}
                           </span>
                         </div>
@@ -1035,7 +1090,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                                   <% end %>
                                 </div>
                               </div>
-                              <div class="flex items-center gap-1">
+                              <div :if={detail.euro_numbers != []} class="flex items-center gap-1">
                                 <span class="text-base-content/60">Euro:</span>
                                 <div class="flex gap-1">
                                   <%= for num <- detail.euro_numbers |> Enum.sort() do %>
@@ -1088,7 +1143,7 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
                       <.number_ball numbers={@simulation.result.matched_main} type="main" size="sm" />
                     </div>
                   </div>
-                  <div>
+                  <div :if={@simulation.result.matched_euro not in [nil, []]}>
                     <span class="text-sm font-semibold">Euro:</span>
                     <div class="flex gap-1 mt-1">
                       <.number_ball numbers={@simulation.result.matched_euro} type="euro" size="sm" />

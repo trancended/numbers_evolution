@@ -7,7 +7,7 @@ defmodule NumbersEvolution.Simulations do
 
   import Ecto.Query, warn: false
   alias NumbersEvolution.Accounts.User
-  alias NumbersEvolution.{AtomicCounter, Draws, Strategies}
+  alias NumbersEvolution.{AtomicCounter, Draws, Games, Strategies}
   alias NumbersEvolution.Repo
 
   alias NumbersEvolution.Simulations.{
@@ -120,6 +120,7 @@ defmodule NumbersEvolution.Simulations do
     """
     defstruct [
       :strategy,
+      :game,
       :target_numbers,
       :max_attempts,
       :timeout_seconds,
@@ -316,14 +317,15 @@ defmodule NumbersEvolution.Simulations do
   defp maybe_generate_vip1_pool(attrs, target_draw, true) do
     alias NumbersEvolution.Strategies.Generator
 
+    game = draw_game(target_draw)
     target_main = target_draw.numbers.main_numbers
     target_euro = target_draw.numbers.euro_numbers
 
     # First, validate that target numbers meet VIP constraints
-    case Generator.validate_vip_constraints(target_main, target_euro) do
+    case Generator.validate_vip_constraints(target_main, target_euro, game) do
       :ok ->
         # Target meets constraints, try generating pool with retry
-        generate_vip1_pool_with_retry(attrs, target_main, target_euro, 100)
+        generate_vip1_pool_with_retry(attrs, game, target_main, target_euro, 100)
 
       {:error, constraint_errors} ->
         # Target numbers don't meet VIP constraints
@@ -340,12 +342,22 @@ defmodule NumbersEvolution.Simulations do
 
   defp maybe_generate_vip1_pool(attrs, _target_draw, false), do: {:ok, attrs}
 
+  # Resolves the game config from a draw; game types without a configuration
+  # (multi_multi) fall back to the historical default
+  defp draw_game(target_draw) do
+    if Games.supported?(target_draw.game_type) do
+      Games.get!(target_draw.game_type)
+    else
+      Games.default()
+    end
+  end
+
   # Retry VIP1 pool generation up to max_attempts times
-  defp generate_vip1_pool_with_retry(attrs, target_main, target_euro, max_attempts) do
+  defp generate_vip1_pool_with_retry(attrs, game, target_main, target_euro, max_attempts) do
     alias NumbersEvolution.Strategies.Generator
 
     Enum.reduce_while(1..max_attempts, nil, fn attempt, _acc ->
-      {:ok, pool} = Generator.generate_vip1_pool()
+      {:ok, pool} = Generator.generate_vip1_pool(game)
 
       case Generator.validate_vip1_pool_contains_target(pool, target_main, target_euro) do
         :ok ->
@@ -409,23 +421,36 @@ defmodule NumbersEvolution.Simulations do
   defp generate_vip2_blacklist(attrs, target_draw) do
     alias NumbersEvolution.Strategies.Generator
 
+    game = draw_game(target_draw)
     target_main = target_draw.numbers.main_numbers
     target_euro = target_draw.numbers.euro_numbers
     respect_rules = parse_boolean(attrs["auto_blacklist_respect_rules"], false)
 
-    # The VIP2 generator enforces VIP constraints (2 odd + 3 even, max 2 per
-    # decade), so the target must satisfy them - except in respect-rules mode,
-    # which generates through the standard path
+    # The VIP2 generator enforces VIP constraints (per-game odd/even split,
+    # max 2 per decade), so the target must satisfy them - except in
+    # respect-rules mode, which generates through the standard path
     constraints_check =
       if respect_rules,
         do: :ok,
-        else: Generator.validate_vip_constraints(target_main, target_euro)
+        else: Generator.validate_vip_constraints(target_main, target_euro, game)
 
     case constraints_check do
       :ok ->
-        main_size = parse_blacklist_size(attrs["auto_blacklist_main_size"], 25, 45)
-        euro_size = parse_blacklist_size(attrs["auto_blacklist_euro_size"], 6, 10)
-        blacklist = generate_auto_blacklist(target_main, target_euro, main_size, euro_size)
+        main_size =
+          parse_blacklist_size(
+            attrs["auto_blacklist_main_size"],
+            game.vip.blacklist_main,
+            game.main.max - game.main.count
+          )
+
+        euro_size =
+          parse_blacklist_size(
+            attrs["auto_blacklist_euro_size"],
+            game.vip.blacklist_bonus,
+            max(game.bonus.max - game.bonus.count, 0)
+          )
+
+        blacklist = generate_auto_blacklist(target_main, target_euro, main_size, euro_size, game)
 
         {:ok, Map.put(attrs, "vip2_blacklist", blacklist)}
 
@@ -441,8 +466,8 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  # Blacklist size must leave the 5 target + at least 5 free pickable main
-  # numbers (and 2 + 2 euro), hence the caps of 45 and 10
+  # Blacklist size must leave the target numbers plus at least one full extra
+  # set of pickable numbers, hence the per-game caps (Eurojackpot: 45/10)
   defp parse_blacklist_size(value, default, max) do
     value |> parse_int(default) |> min(max) |> max(0)
   end
@@ -451,11 +476,33 @@ defmodule NumbersEvolution.Simulations do
   Generates a random auto-blacklist that never blocks the target numbers
   (the intentional look-ahead semantics of VIP2-style simulations).
   """
-  @spec generate_auto_blacklist(list(), list(), non_neg_integer(), non_neg_integer()) :: map()
-  def generate_auto_blacklist(target_main, target_euro, main_size, euro_size) do
+  @spec generate_auto_blacklist(
+          list(),
+          list(),
+          non_neg_integer(),
+          non_neg_integer(),
+          String.t() | map()
+        ) :: map()
+  def generate_auto_blacklist(
+        target_main,
+        target_euro,
+        main_size,
+        euro_size,
+        game \\ Games.default_id()
+      ) do
+    game = Games.get!(game)
+
+    euro_candidates =
+      if game.bonus.count > 0 do
+        Enum.to_list(game.bonus.min..game.bonus.max) -- target_euro
+      else
+        []
+      end
+
     %{
-      "main_blacklist" => Enum.take_random(Enum.to_list(1..50) -- target_main, main_size),
-      "euro_blacklist" => Enum.take_random(Enum.to_list(1..12) -- target_euro, euro_size),
+      "main_blacklist" =>
+        Enum.take_random(Enum.to_list(game.main.min..game.main.max) -- target_main, main_size),
+      "euro_blacklist" => Enum.take_random(euro_candidates, euro_size),
       "main_size" => main_size,
       "euro_size" => euro_size
     }
@@ -982,11 +1029,14 @@ defmodule NumbersEvolution.Simulations do
       vip1_mode = Map.get(options, "vip1_mode", false)
       thread_count = Map.get(options, "thread_count", 10)
 
+      game = draw_game(target_draw)
+
       {strategy, vip1_pool_converted, vip2_blacklist_converted, pools} =
-        prepare_generation_modes(strategy, options)
+        prepare_generation_modes(strategy, options, game)
 
       context = %SimulationContext{
         strategy: strategy,
+        game: game,
         target_numbers: target_draw.numbers,
         max_attempts: max_attempts,
         timeout_seconds: timeout_seconds,
@@ -1052,14 +1102,14 @@ defmodule NumbersEvolution.Simulations do
   #   rules (standard path, strategy preferences apply); VIP2 mode (default)
   #   converts the blacklist and precomputes its pools
   # - standard path: hot/cold/random pools built once instead of per attempt
-  defp prepare_generation_modes(strategy, options) do
+  defp prepare_generation_modes(strategy, options, game) do
     vip1_pool = Map.get(options, "vip1_pool")
     vip2_blacklist = Map.get(options, "vip2_blacklist")
     respect_rules = Map.get(options, "auto_blacklist_respect_rules", false)
 
     vip1_pool_converted =
       if vip1_pool do
-        %{main_pool: vip1_pool["main_pool"], euro_pool: vip1_pool["euro_pool"]}
+        %{main_pool: vip1_pool["main_pool"], euro_pool: vip1_pool["euro_pool"] || []}
       end
 
     {strategy, vip2_blacklist_converted} =
@@ -1074,7 +1124,7 @@ defmodule NumbersEvolution.Simulations do
           }
 
           {strategy,
-           Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist))}
+           Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist, game))}
 
         true ->
           {strategy, nil}
@@ -1082,7 +1132,7 @@ defmodule NumbersEvolution.Simulations do
 
     pools =
       if is_nil(vip1_pool_converted) and is_nil(vip2_blacklist_converted) do
-        Strategies.Generator.build_pools(strategy)
+        Strategies.Generator.build_pools(strategy, game)
       end
 
     {strategy, vip1_pool_converted, vip2_blacklist_converted, pools}
@@ -1219,6 +1269,7 @@ defmodule NumbersEvolution.Simulations do
 
   defp generate_and_check_attempt(context) do
     generator_opts = [
+      game: context.game,
       half_random_mode: context.half_random_mode,
       vip1_mode: context.vip1_mode,
       vip1_pool: context.vip1_pool,
@@ -1282,7 +1333,7 @@ defmodule NumbersEvolution.Simulations do
     # Sprawdź wszystkie możliwe stopnie nagród i zlicz je
     main_matches = count_matches(generated.main, context.target_numbers.main_numbers)
     euro_matches = count_matches(generated.euro, context.target_numbers.euro_numbers)
-    all_tiers = tiers_for_matches(main_matches, euro_matches)
+    all_tiers = tiers_for_matches(main_matches, euro_matches, context.game)
 
     # Debug log dla jackpota
     if 1 in all_tiers do
@@ -1330,53 +1381,29 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  @prize_tiers %{
-    # I (5+2)
-    {5, 2} => 1,
-    # II (5+1)
-    {5, 1} => 2,
-    # III (5+0)
-    {5, 0} => 3,
-    # IV (4+2)
-    {4, 2} => 4,
-    # V (4+1)
-    {4, 1} => 5,
-    # VI (3+2)
-    {3, 2} => 6,
-    # VII (4+0)
-    {4, 0} => 7,
-    # VIII (2+2)
-    {2, 2} => 8,
-    # IX (3+1)
-    {3, 1} => 9,
-    # X (3+0)
-    {3, 0} => 10,
-    # XI (1+2)
-    {1, 2} => 11,
-    # XII (2+1)
-    {2, 1} => 12
-  }
-
   @doc false
   # Calculates all prize tiers that match for a given draw (public for benchmarks).
   # For example, if someone matches 5+2, they also technically match 5+1, 5+0, 4+2, 4+1, etc.
   # Returns a list of all matching tier numbers.
-  def calculate_all_prize_tiers(generated, target_numbers) do
+  def calculate_all_prize_tiers(generated, target_numbers, game \\ Games.default_id()) do
     main_matches = count_matches(generated.main, target_numbers.main_numbers)
     euro_matches = count_matches(generated.euro, target_numbers.euro_numbers)
-    tiers_for_matches(main_matches, euro_matches)
+    tiers_for_matches(main_matches, euro_matches, Games.get!(game))
   end
 
   # No tier exists without at least 1 main match - and a descending 1..0 range
   # would wrongly count tier 11 (1+2) for a 0-main draw
-  defp tiers_for_matches(0, _euro_matches), do: []
+  defp tiers_for_matches(0, _euro_matches, _game), do: []
 
-  defp tiers_for_matches(main_matches, euro_matches) do
-    # Generate all possible combinations from current matches down to minimum winning combinations
+  defp tiers_for_matches(main_matches, euro_matches, game) do
+    # Generate all possible combinations from current matches down to minimum
+    # winning combinations, using the game's prize tier table
     # Note: euro can be 0 (prizes exist for X+0 combinations)
+    prize_tiers = game.prize_tiers
+
     for main <- 1..main_matches,
         euro <- 0..euro_matches,
-        tier = Map.get(@prize_tiers, {main, euro}),
+        tier = Map.get(prize_tiers, {main, euro}),
         tier != nil do
       tier
     end

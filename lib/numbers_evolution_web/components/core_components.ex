@@ -840,7 +840,7 @@ defmodule NumbersEvolutionWeb.CoreComponents do
   end
 
   @doc """
-  Renders Eurojackpot number balls.
+  Renders lottery number balls.
 
   ## Examples
 

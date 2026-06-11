@@ -5,6 +5,7 @@ defmodule NumbersEvolutionWeb.CouponController do
 
   use NumbersEvolutionWeb, :controller
 
+  alias NumbersEvolution.Games
   alias NumbersEvolution.Strategies
   alias NumbersEvolution.Strategies.Generator
 
@@ -20,7 +21,7 @@ defmodule NumbersEvolutionWeb.CouponController do
 
     with {:ok, count_int} <- parse_count(count),
          {:ok, strategy} <- get_strategy_safe(user, strategy_id),
-         {:ok, coupons} <- generate_coupons(strategy, count_int) do
+         {:ok, coupons} <- generate_coupons(strategy, count_int, game_type) do
       conn
       |> put_status(:ok)
       |> render(:generate, coupons: coupons, game_type: game_type, strategy: strategy)
@@ -55,7 +56,7 @@ defmodule NumbersEvolutionWeb.CouponController do
 
     with {:ok, count_int} <- parse_count(count),
          {:ok, top_strategy} <- get_top_strategy(user),
-         {:ok, coupons} <- generate_coupons(top_strategy, count_int) do
+         {:ok, coupons} <- generate_coupons(top_strategy, count_int, game_type) do
       conn
       |> put_status(:ok)
       |> render(:generate, coupons: coupons, game_type: game_type, strategy: top_strategy)
@@ -118,17 +119,22 @@ defmodule NumbersEvolutionWeb.CouponController do
 
   defp parse_count(_), do: {:error, :invalid_count}
 
-  defp generate_coupons(strategy, count) do
+  defp generate_coupons(strategy, count, game_type) do
+    game_id =
+      if is_binary(game_type) and Games.supported?(game_type),
+        do: game_type,
+        else: Games.default_id()
+
     coupons =
       Enum.reduce_while(1..count, [], fn _i, acc ->
-        process_coupon_generation(strategy, acc, count)
+        process_coupon_generation(strategy, acc, count, game_id)
       end)
 
     format_coupons_result(coupons)
   end
 
-  defp process_coupon_generation(strategy, acc, count) do
-    case Generator.generate_numbers(strategy) do
+  defp process_coupon_generation(strategy, acc, count, game_id) do
+    case Generator.generate_numbers(strategy, game: game_id) do
       {:ok, numbers} ->
         coupon = build_coupon(numbers)
         continue_or_halt(coupon, acc, count)

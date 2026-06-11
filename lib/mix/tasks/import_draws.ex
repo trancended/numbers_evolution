@@ -1,10 +1,11 @@
 defmodule Mix.Tasks.Import.Draws do
-  @shortdoc "Imports the latest Eurojackpot draw from the public API"
+  @shortdoc "Imports the latest draws (Eurojackpot, Lotto) from the public API"
 
   @moduledoc """
-  Fetches the most recent Eurojackpot draw and stores it in the database.
+  Fetches the most recent draw for each supported game and stores it in the database.
 
-      mix import.draws
+      mix import.draws          # imports all importable games
+      mix import.draws lotto    # imports a single game
 
   Running it again for the same draw is a no-op (idempotent).
   """
@@ -12,25 +13,47 @@ defmodule Mix.Tasks.Import.Draws do
   use Mix.Task
 
   alias NumbersEvolution.Draws.Importer
+  alias NumbersEvolution.Games
 
   @impl Mix.Task
-  def run(_args) do
+  def run(args) do
     Mix.Task.run("app.start")
 
-    case Importer.import_latest() do
+    games =
+      case args do
+        [] -> Games.importable()
+        [game_id | _] -> [Games.get!(game_id)]
+      end
+
+    results = Enum.map(games, &import_game/1)
+
+    if Enum.any?(results, &(&1 == :error)) do
+      exit({:shutdown, 1})
+    end
+  end
+
+  defp import_game(game) do
+    case Importer.import_latest(game.id) do
       {:ok, :imported, draw} ->
-        Mix.shell().info(
-          "Imported Eurojackpot draw #{draw.draw_date}: " <>
-            "#{Enum.join(draw.numbers.main_numbers, ", ")} + " <>
-            "#{Enum.join(draw.numbers.euro_numbers, ", ")}"
-        )
+        Mix.shell().info("Imported #{game.label} draw #{draw.draw_date}: #{format_numbers(draw)}")
+        :ok
 
       {:ok, :already_exists} ->
-        Mix.shell().info("Latest draw already imported - nothing to do")
+        Mix.shell().info("#{game.label}: latest draw already imported - nothing to do")
+        :ok
 
       {:error, reason} ->
-        Mix.shell().error("Import failed: #{inspect(reason)}")
-        exit({:shutdown, 1})
+        Mix.shell().error("#{game.label}: import failed: #{inspect(reason)}")
+        :error
+    end
+  end
+
+  defp format_numbers(draw) do
+    main = Enum.join(draw.numbers.main_numbers, ", ")
+
+    case draw.numbers.euro_numbers do
+      [] -> main
+      euro -> main <> " + " <> Enum.join(euro, ", ")
     end
   end
 end
