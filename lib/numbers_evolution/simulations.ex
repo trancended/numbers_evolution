@@ -131,6 +131,7 @@ defmodule NumbersEvolution.Simulations do
       :vip1_mode,
       :vip1_pool,
       :vip2_blacklist,
+      :pools,
       :thread_count,
       :counter_table,
       :prize_tiers_table
@@ -1002,13 +1003,25 @@ defmodule NumbersEvolution.Simulations do
           nil
         end
 
-      # Convert VIP2 blacklist to the format expected by Generator
+      # Convert VIP2 blacklist to the format expected by Generator and
+      # precompute its pools once - the blacklist is fixed for the whole simulation
       vip2_blacklist_converted =
         if vip2_blacklist do
-          %{
+          blacklist = %{
             main_blacklist: vip2_blacklist["main_blacklist"],
             euro_blacklist: vip2_blacklist["euro_blacklist"]
           }
+
+          Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist))
+        else
+          nil
+        end
+
+      # Standard path: hot/cold/random pools depend only on the rules,
+      # so build them once instead of on every attempt
+      pools =
+        if is_nil(vip1_pool_converted) and is_nil(vip2_blacklist_converted) do
+          Strategies.Generator.build_pools(strategy)
         else
           nil
         end
@@ -1026,6 +1039,7 @@ defmodule NumbersEvolution.Simulations do
         vip1_mode: vip1_mode,
         vip1_pool: vip1_pool_converted,
         vip2_blacklist: vip2_blacklist_converted,
+        pools: pools,
         thread_count: thread_count,
         counter_table: counter_table,
         prize_tiers_table: prize_tiers_table
@@ -1157,7 +1171,8 @@ defmodule NumbersEvolution.Simulations do
       half_random_mode: context.half_random_mode,
       vip1_mode: context.vip1_mode,
       vip1_pool: context.vip1_pool,
-      vip2_blacklist: context.vip2_blacklist
+      vip2_blacklist: context.vip2_blacklist,
+      pools: context.pools
     ]
 
     case Strategies.Generator.generate_numbers(context.strategy, generator_opts) do

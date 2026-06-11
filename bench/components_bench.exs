@@ -29,14 +29,25 @@ end)
 duplicate_attempt = Bench.Support.random_attempt()
 SimulationDuplicateController.check_attempt(controller, duplicate_attempt)
 
+pools = Generator.build_pools(strategy)
+
+vip2_blacklist_with_pools =
+  Map.put(vip2_blacklist, :pools, Generator.prepare_vip2_pools(vip2_blacklist))
+
 Benchee.run(
   %{
     "generator: standard" => fn -> Generator.generate_numbers(strategy) end,
+    "generator: standard (precomputed pools)" => fn ->
+      Generator.generate_numbers(strategy, pools: pools)
+    end,
     "generator: half_random" => fn ->
       Generator.generate_numbers(strategy, half_random_mode: true)
     end,
     "generator: vip2" => fn ->
       Generator.generate_numbers(strategy, vip2_blacklist: vip2_blacklist)
+    end,
+    "generator: vip2 (precomputed pools)" => fn ->
+      Generator.generate_numbers(strategy, vip2_blacklist: vip2_blacklist_with_pools)
     end,
     "dedup: check (mostly unique)" =>
       {fn attempt -> SimulationDuplicateController.check_attempt(controller, attempt) end,

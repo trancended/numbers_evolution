@@ -143,13 +143,24 @@ end
 strategy = Bench.Support.standard_strategy()
 target = Bench.Support.target_numbers()
 
-Bench.E2E.run_pipeline("pipeline: standard", strategy, [], target)
+# Mirror what run_simulation does since Phase 1.2: pools precomputed once
+generator_opts =
+  if function_exported?(Generator, :build_pools, 1) do
+    [pools: Generator.build_pools(strategy)]
+  else
+    []
+  end
 
-Bench.E2E.run_pipeline(
-  "pipeline: vip2    ",
-  strategy,
-  [vip2_blacklist: Bench.Support.vip2_blacklist()],
-  target
-)
+vip2_blacklist = Bench.Support.vip2_blacklist()
+
+vip2_blacklist =
+  if function_exported?(Generator, :prepare_vip2_pools, 1) do
+    Map.put(vip2_blacklist, :pools, Generator.prepare_vip2_pools(vip2_blacklist))
+  else
+    vip2_blacklist
+  end
+
+Bench.E2E.run_pipeline("pipeline: standard", strategy, generator_opts, target)
+Bench.E2E.run_pipeline("pipeline: vip2    ", strategy, [vip2_blacklist: vip2_blacklist], target)
 
 Bench.E2E.run_task_overhead(strategy, target)
