@@ -82,6 +82,21 @@ defmodule NumbersEvolution.Draws do
   end
 
   @doc """
+  Returns the set of draw dates already stored for a game type.
+
+  Used by the importer to backfill only the missing archive entries.
+  """
+  @spec draw_dates(String.t()) :: MapSet.t(Date.t())
+  def draw_dates(game_type) when is_binary(game_type) do
+    from(d in Draw,
+      where: d.game_type == ^game_type,
+      select: d.draw_date
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
   Gets recent draws for a game type.
 
   ## Examples

@@ -6,8 +6,12 @@ Aplikacja obsługuje dziś wyłącznie Eurojackpot (5 z 50 + 2 z 12), mimo że s
 dopuszcza `game_type` `"lotto"` i `"multi_multi"`. Celem jest dodanie polskiego **Lotto**
 (6 z 49, bez liczb dodatkowych) jako pełnoprawnej gry do wyboru obok Eurojackpot:
 
-- import wyników Lotto (Lottoland API ma endpoint `polishLotto` — zweryfikowano, zwraca
-  `"numbers": [6 liczb]`, bez liczb dodatkowych; dodatkowo pole `polishLottoPlus`),
+- import wyników Lotto z archiwum **mbnet.com.pl/dl.txt** (pełna historia od 1957,
+  format `nr. dd.mm.yyyy 1,2,3,4,5,6`, aktualizowane po każdym losowaniu; każdy import
+  automatycznie dociąga brakującą historię). UWAGA: pierwotnie planowany endpoint
+  Lottoland `polishLotto` okazał się zawodny — między losowaniami `last` wskazuje na
+  nadchodzące losowanie z `numbers: nil`. Archiwum mbnet działa tylko po HTTP
+  (certyfikat HTTPS jest niepoprawny),
 - przechowywanie i walidacja losowań Lotto,
 - generowanie kuponów 6 z 49,
 - symulacje przeciwko losowaniom Lotto (w tym tryby VIP1/VIP2),
@@ -94,7 +98,7 @@ celowo poza zakresem (faza 3).
 | `lib/numbers_evolution/games.ex` | **NOWY** — konfiguracja gier (sekcja 3) |
 | `lib/numbers_evolution/draws/draw_numbers.ex` | `changeset/3` z konfiguracją gry: main `count/min/max`, bonus `count` (dla Lotto wymagane `euro_numbers == []`, default `[]`) |
 | `lib/numbers_evolution/draws/draw.ex` | przekazanie `game_type` do `cast_embed(:numbers, with: ...)` |
-| `lib/numbers_evolution/draws/importer.ex` | `import_latest/1` (id gry), parser per gra: eurojackpot `numbers + euroNumbers`, lotto `numbers` (6); URL z `Games` |
+| `lib/numbers_evolution/draws/importer.ex` | `import_latest/1` (id gry); dwa typy źródeł z `Games`: `:lottoland` (eurojackpot, najnowsze losowanie) i `:archive` (lotto, mbnet dl.txt — backfill całej brakującej historii przy każdym imporcie) |
 | `lib/mix/tasks/import_draws.ex` | `mix import.draws [gra]` — bez argumentu importuje wszystkie gry z konfiguracją importu |
 | `lib/numbers_evolution/strategies/generator.ex` | parametryzacja per gra: liczność/zakresy main+bonus, low/high, walidacja ratio (== dla EJ, >= dla Lotto), pule hot/cold/random, half-random, VIP1 (pula, parzystość, dekady), VIP2, `validate_vip_constraints/3`, `validate_strategy_constraints/4`; opcja `:game` (default eurojackpot) |
 | `lib/numbers_evolution/simulations.ex` | gra z `target_draw.game_type` w `SimulationContext`; `tiers_for_matches` z `Games.prize_tiers`; VIP1 pool/VIP2 blacklist per gra (rozmiary, capy); `generate_auto_blacklist/5` (z grą); przekazanie `:game` do generatora |

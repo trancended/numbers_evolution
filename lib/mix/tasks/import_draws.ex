@@ -1,13 +1,17 @@
 defmodule Mix.Tasks.Import.Draws do
-  @shortdoc "Imports the latest draws (Eurojackpot, Lotto) from the public API"
+  @shortdoc "Imports draws (Eurojackpot: latest, Lotto: full history backfill)"
 
   @moduledoc """
-  Fetches the most recent draw for each supported game and stores it in the database.
+  Imports draws for each supported game and stores them in the database.
+
+  Eurojackpot fetches the most recent draw from the Lottoland API. Lotto
+  downloads the full mbnet.com.pl archive and automatically backfills every
+  missing draw (including the latest one).
 
       mix import.draws          # imports all importable games
       mix import.draws lotto    # imports a single game
 
-  Running it again for the same draw is a no-op (idempotent).
+  Running it again is a no-op for already imported draws (idempotent).
   """
 
   use Mix.Task
@@ -40,6 +44,20 @@ defmodule Mix.Tasks.Import.Draws do
 
       {:ok, :already_exists} ->
         Mix.shell().info("#{game.label}: latest draw already imported - nothing to do")
+        :ok
+
+      {:ok, :history_imported, %{imported: 0, total: total}} ->
+        Mix.shell().info(
+          "#{game.label}: all #{total} archive draws already imported - nothing to do"
+        )
+
+        :ok
+
+      {:ok, :history_imported, %{imported: imported, total: total}} ->
+        Mix.shell().info(
+          "#{game.label}: imported #{imported} draws from the archive (#{total} total)"
+        )
+
         :ok
 
       {:error, reason} ->
