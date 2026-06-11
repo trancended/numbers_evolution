@@ -99,6 +99,8 @@ celowo poza zakresem (faza 3).
 | `lib/numbers_evolution/draws/draw_numbers.ex` | `changeset/3` z konfiguracją gry: main `count/min/max`, bonus `count` (dla Lotto wymagane `euro_numbers == []`, default `[]`) |
 | `lib/numbers_evolution/draws/draw.ex` | przekazanie `game_type` do `cast_embed(:numbers, with: ...)` |
 | `lib/numbers_evolution/draws/importer.ex` | `import_latest/1` (id gry); dwa typy źródeł z `Games`: `:lottoland` (eurojackpot, najnowsze losowanie) i `:archive` (lotto, mbnet dl.txt — backfill całej brakującej historii przy każdym imporcie) |
+| `lib/numbers_evolution/draws/auto_importer.ex` | **NOWY** — GenServer importujący wszystkie gry ~10 s po starcie aplikacji i co 6 h (flaga `auto_import_draws` w dev/prod; wyłączone w testach). Dzięki temu świeży deploy na prod sam dociąga historię |
+| `lib/numbers_evolution/release.ex` | `Release.import_draws/0` — ręczny import na release: `/app/bin/numbers_evolution eval "NumbersEvolution.Release.import_draws()"` |
 | `lib/mix/tasks/import_draws.ex` | `mix import.draws [gra]` — bez argumentu importuje wszystkie gry z konfiguracją importu |
 | `lib/numbers_evolution/strategies/generator.ex` | parametryzacja per gra: liczność/zakresy main+bonus, low/high, walidacja ratio (== dla EJ, >= dla Lotto), pule hot/cold/random, half-random, VIP1 (pula, parzystość, dekady), VIP2, `validate_vip_constraints/3`, `validate_strategy_constraints/4`; opcja `:game` (default eurojackpot) |
 | `lib/numbers_evolution/simulations.ex` | gra z `target_draw.game_type` w `SimulationContext`; `tiers_for_matches` z `Games.prize_tiers`; VIP1 pool/VIP2 blacklist per gra (rozmiary, capy); `generate_auto_blacklist/5` (z grą); przekazanie `:game` do generatora |
@@ -138,8 +140,10 @@ celowo poza zakresem (faza 3).
   blacklisty i wagi działają w pełni, ratio tylko częściowo. Rozwiązanie docelowe w fazie 2.
 - **Porównywalność score'ów** między grami (pule różnią się 10×) — ranking pozostaje
   globalny; oznaczyć w UI/dokumentacji.
-- **API Lottoland** dla `polishLotto` nie zawiera pola walut/numerów euro — parser musi
-  być tolerancyjny na dodatkowe pola (`polishLottoPlus` ignorujemy).
+- **Duplikaty dat w archiwum mbnet**: 956 dat ma po dwa losowania (historyczne losowania
+  dwa razy dziennie, np. sylwestrowe). Unikalny indeks `(game_type, draw_date)` dopuszcza
+  jedno losowanie na datę, więc import zapisuje pierwsze wystąpienie — 6407 z 7363
+  wpisów (kompletna oś czasu, bez drugich losowań z tego samego dnia).
 - Stare symulacje/zapisane opcje (`vip1_pool`, `vip2_blacklist`) są zawsze EJ — odczyt
   per gra musi pozostać kompatybilny (gra wynika z `target_draw`, więc bez migracji).
 

@@ -71,6 +71,43 @@ defmodule NumbersEvolution.Release do
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
   end
 
+  @doc """
+  Imports draws for all importable games (Lotto: full archive backfill,
+  Eurojackpot: latest draw). For manual use on a release:
+
+      /app/bin/numbers_evolution eval "NumbersEvolution.Release.import_draws()"
+
+  The app also runs the same import automatically via
+  `NumbersEvolution.Draws.AutoImporter`.
+  """
+  def import_draws do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(:req)
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn _repo ->
+          Enum.each(NumbersEvolution.Games.importable(), fn game ->
+            IO.puts("Importing #{game.label}...")
+
+            case NumbersEvolution.Draws.Importer.import_latest(game.id) do
+              {:ok, :imported, draw} ->
+                IO.puts("  imported draw #{draw.draw_date}")
+
+              {:ok, :already_exists} ->
+                IO.puts("  latest draw already imported")
+
+              {:ok, :history_imported, %{imported: imported, total: total}} ->
+                IO.puts("  imported #{imported} archive draws (#{total} total)")
+
+              {:error, reason} ->
+                IO.puts("  import failed: #{inspect(reason)}")
+            end
+          end)
+        end)
+    end
+  end
+
   def seed do
     load_app()
 

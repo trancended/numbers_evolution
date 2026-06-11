@@ -55,7 +55,7 @@ jobs:
         echo "Cleanup completed."
 
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Elixir Environment
       uses: ./.github/actions/setup-elixir
@@ -87,7 +87,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Create status notification
       run: |

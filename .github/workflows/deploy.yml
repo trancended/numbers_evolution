@@ -33,7 +33,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Elixir Environment
       uses: ./.github/actions/setup-elixir
@@ -64,7 +64,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Fly CLI
       uses: superfly/flyctl-actions/setup-flyctl@master
@@ -118,7 +118,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Check application health
       run: |
