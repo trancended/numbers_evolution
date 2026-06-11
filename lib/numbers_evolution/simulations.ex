@@ -46,7 +46,8 @@ defmodule NumbersEvolution.Simulations do
       :ets.update_counter(table_name, tier, 1)
     end
 
-    def increment_tier(table_name, tier, generated, target) when tier in 1..12 do
+    def increment_tier(table_name, tier, generated, matched_main, matched_euro)
+        when tier in 1..12 do
       :ets.update_counter(table_name, tier, 1)
 
       # Store details for high prize tiers (1-5)
@@ -58,10 +59,6 @@ defmodule NumbersEvolution.Simulations do
             [{^details_key, details}] -> details
             [] -> []
           end
-
-        # Calculate matched numbers
-        matched_main = count_matches_local(generated.main, target.main_numbers)
-        matched_euro = count_matches_local(generated.euro, target.euro_numbers)
 
         new_detail = %{
           main_matched: matched_main,
@@ -114,13 +111,6 @@ defmodule NumbersEvolution.Simulations do
     def delete(table_name) do
       :ets.delete(table_name)
     end
-
-    # Local implementation of count_matches for PrizeTiersTracker
-    defp count_matches_local(generated_list, target_list) do
-      generated_set = MapSet.new(generated_list)
-      target_set = MapSet.new(target_list)
-      MapSet.intersection(generated_set, target_set) |> MapSet.size()
-    end
   end
 
   defmodule SimulationContext do
@@ -141,6 +131,7 @@ defmodule NumbersEvolution.Simulations do
       :vip1_mode,
       :vip1_pool,
       :vip2_blacklist,
+      :pools,
       :thread_count,
       :counter_table,
       :prize_tiers_table
@@ -391,9 +382,10 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  # Generate VIP2 blacklist if strategy is VIP2 (auto-blacklist)
+  # Generate auto-blacklist when explicitly requested via options, or for
+  # legacy VIP2 strategies (detected by name + empty blacklist)
   defp maybe_generate_vip2_blacklist(attrs, strategy, target_draw) do
-    if vip2_strategy?(strategy) do
+    if parse_boolean(attrs["auto_blacklist"], false) or vip2_strategy?(strategy) do
       generate_vip2_blacklist(attrs, target_draw)
     else
       {:ok, attrs}
@@ -410,21 +402,34 @@ defmodule NumbersEvolution.Simulations do
     is_empty_blacklist and is_vip2_name
   end
 
-  # Generate random blacklist for VIP2 and validate against target numbers
+  # Generate random blacklist that never blocks the target numbers.
+  # Sampling from non-target numbers is equivalent to "retry random blacklists
+  # until none blocks the target" (the intentional look-ahead semantics), but
+  # always succeeds and works for any configurable size.
   defp generate_vip2_blacklist(attrs, target_draw) do
     alias NumbersEvolution.Strategies.Generator
 
     target_main = target_draw.numbers.main_numbers
     target_euro = target_draw.numbers.euro_numbers
+    respect_rules = parse_boolean(attrs["auto_blacklist_respect_rules"], false)
 
-    # First, validate that target numbers meet VIP constraints
-    case Generator.validate_vip_constraints(target_main, target_euro) do
+    # The VIP2 generator enforces VIP constraints (2 odd + 3 even, max 2 per
+    # decade), so the target must satisfy them - except in respect-rules mode,
+    # which generates through the standard path
+    constraints_check =
+      if respect_rules,
+        do: :ok,
+        else: Generator.validate_vip_constraints(target_main, target_euro)
+
+    case constraints_check do
       :ok ->
-        # Target meets constraints, try generating blacklist with retry
-        generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, 100)
+        main_size = parse_blacklist_size(attrs["auto_blacklist_main_size"], 25, 45)
+        euro_size = parse_blacklist_size(attrs["auto_blacklist_euro_size"], 6, 10)
+        blacklist = generate_auto_blacklist(target_main, target_euro, main_size, euro_size)
+
+        {:ok, Map.put(attrs, "vip2_blacklist", blacklist)}
 
       {:error, constraint_errors} ->
-        # Target numbers don't meet VIP constraints
         {:error,
          %{
            type: :vip_constraints_not_met,
@@ -436,50 +441,24 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  # Retry VIP2 blacklist generation up to max_attempts times
-  defp generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, max_attempts) do
-    all_main = 1..50 |> Enum.to_list()
-    all_euro = 1..12 |> Enum.to_list()
-
-    Enum.reduce_while(1..max_attempts, nil, fn attempt, _acc ->
-      main_blacklist = Enum.take_random(all_main, 25)
-      euro_blacklist = Enum.take_random(all_euro, 6)
-
-      blocked_main = Enum.filter(target_main, &(&1 in main_blacklist))
-      blocked_euro = Enum.filter(target_euro, &(&1 in euro_blacklist))
-
-      if Enum.empty?(blocked_main) and Enum.empty?(blocked_euro) do
-        success_vip2_blacklist(attrs, main_blacklist, euro_blacklist)
-      else
-        handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro)
-      end
-    end)
+  # Blacklist size must leave the 5 target + at least 5 free pickable main
+  # numbers (and 2 + 2 euro), hence the caps of 45 and 10
+  defp parse_blacklist_size(value, default, max) do
+    value |> parse_int(default) |> min(max) |> max(0)
   end
 
-  defp success_vip2_blacklist(attrs, main_blacklist, euro_blacklist) do
-    attrs_with_vip2 =
-      Map.put(attrs, "vip2_blacklist", %{
-        "main_blacklist" => main_blacklist,
-        "euro_blacklist" => euro_blacklist
-      })
-
-    {:halt, {:ok, attrs_with_vip2}}
-  end
-
-  defp handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro) do
-    if attempt == max_attempts do
-      {:halt,
-       {:error,
-        %{
-          type: :vip2_blacklist_generation_failed,
-          message:
-            "Nie udało się wygenerować prawidłowego blacklistu VIP2 po #{max_attempts} próbach",
-          target_main: target_main,
-          target_euro: target_euro
-        }}}
-    else
-      {:cont, nil}
-    end
+  @doc """
+  Generates a random auto-blacklist that never blocks the target numbers
+  (the intentional look-ahead semantics of VIP2-style simulations).
+  """
+  @spec generate_auto_blacklist(list(), list(), non_neg_integer(), non_neg_integer()) :: map()
+  def generate_auto_blacklist(target_main, target_euro, main_size, euro_size) do
+    %{
+      "main_blacklist" => Enum.take_random(Enum.to_list(1..50) -- target_main, main_size),
+      "euro_blacklist" => Enum.take_random(Enum.to_list(1..12) -- target_euro, euro_size),
+      "main_size" => main_size,
+      "euro_size" => euro_size
+    }
   end
 
   @doc """
@@ -849,13 +828,17 @@ defmodule NumbersEvolution.Simulations do
     half_random_mode = parse_boolean(attrs["half_random_mode"], false)
     vip1_mode = parse_boolean(attrs["vip1_mode"], false)
     thread_count = parse_int(attrs["thread_count"], 10)
+    auto_blacklist = parse_boolean(attrs["auto_blacklist"], false)
+    auto_blacklist_respect_rules = parse_boolean(attrs["auto_blacklist_respect_rules"], false)
 
     base_options = %{
       "max_attempts" => max_attempts,
       "timeout_seconds" => timeout_seconds,
       "half_random_mode" => half_random_mode,
       "vip1_mode" => vip1_mode,
-      "thread_count" => thread_count
+      "thread_count" => thread_count,
+      "auto_blacklist" => auto_blacklist,
+      "auto_blacklist_respect_rules" => auto_blacklist_respect_rules
     }
 
     # Add VIP1 pool if provided
@@ -997,31 +980,10 @@ defmodule NumbersEvolution.Simulations do
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
       vip1_mode = Map.get(options, "vip1_mode", false)
-      vip1_pool = Map.get(options, "vip1_pool")
-      vip2_blacklist = Map.get(options, "vip2_blacklist")
-      thread_count = Map.get(options, "thread_count", 48)
+      thread_count = Map.get(options, "thread_count", 10)
 
-      # Convert VIP1 pool to the format expected by Generator
-      vip1_pool_converted =
-        if vip1_pool do
-          %{
-            main_pool: vip1_pool["main_pool"],
-            euro_pool: vip1_pool["euro_pool"]
-          }
-        else
-          nil
-        end
-
-      # Convert VIP2 blacklist to the format expected by Generator
-      vip2_blacklist_converted =
-        if vip2_blacklist do
-          %{
-            main_blacklist: vip2_blacklist["main_blacklist"],
-            euro_blacklist: vip2_blacklist["euro_blacklist"]
-          }
-        else
-          nil
-        end
+      {strategy, vip1_pool_converted, vip2_blacklist_converted, pools} =
+        prepare_generation_modes(strategy, options)
 
       context = %SimulationContext{
         strategy: strategy,
@@ -1036,6 +998,7 @@ defmodule NumbersEvolution.Simulations do
         vip1_mode: vip1_mode,
         vip1_pool: vip1_pool_converted,
         vip2_blacklist: vip2_blacklist_converted,
+        pools: pools,
         thread_count: thread_count,
         counter_table: counter_table,
         prize_tiers_table: prize_tiers_table
@@ -1082,6 +1045,70 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
+  # Converts persisted simulation options into generator inputs, precomputing
+  # everything that stays fixed for the whole simulation:
+  # - VIP1 pool conversion (string keys -> atoms)
+  # - auto-blacklist: respect-rules mode merges the blacklist into the strategy
+  #   rules (standard path, strategy preferences apply); VIP2 mode (default)
+  #   converts the blacklist and precomputes its pools
+  # - standard path: hot/cold/random pools built once instead of per attempt
+  defp prepare_generation_modes(strategy, options) do
+    vip1_pool = Map.get(options, "vip1_pool")
+    vip2_blacklist = Map.get(options, "vip2_blacklist")
+    respect_rules = Map.get(options, "auto_blacklist_respect_rules", false)
+
+    vip1_pool_converted =
+      if vip1_pool do
+        %{main_pool: vip1_pool["main_pool"], euro_pool: vip1_pool["euro_pool"]}
+      end
+
+    {strategy, vip2_blacklist_converted} =
+      cond do
+        vip2_blacklist && respect_rules ->
+          {merge_auto_blacklist_into_rules(strategy, vip2_blacklist), nil}
+
+        vip2_blacklist ->
+          blacklist = %{
+            main_blacklist: vip2_blacklist["main_blacklist"],
+            euro_blacklist: vip2_blacklist["euro_blacklist"]
+          }
+
+          {strategy,
+           Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist))}
+
+        true ->
+          {strategy, nil}
+      end
+
+    pools =
+      if is_nil(vip1_pool_converted) and is_nil(vip2_blacklist_converted) do
+        Strategies.Generator.build_pools(strategy)
+      end
+
+    {strategy, vip1_pool_converted, vip2_blacklist_converted, pools}
+  end
+
+  # Merges the auto-generated blacklist into the strategy's own blacklists,
+  # so the standard generator (and its pools) excludes those numbers while
+  # still honoring the strategy's hot/cold/ratio preferences
+  defp merge_auto_blacklist_into_rules(strategy, vip2_blacklist) do
+    rules = strategy.rules
+
+    main_numbers = %{
+      rules.main_numbers
+      | blacklist:
+          Enum.uniq((rules.main_numbers.blacklist || []) ++ vip2_blacklist["main_blacklist"])
+    }
+
+    euro_numbers = %{
+      rules.euro_numbers
+      | blacklist:
+          Enum.uniq((rules.euro_numbers.blacklist || []) ++ vip2_blacklist["euro_blacklist"])
+    }
+
+    %{strategy | rules: %{rules | main_numbers: main_numbers, euro_numbers: euro_numbers}}
+  end
+
   defp simulate_until_match(%SimulationContext{} = context) do
     # Check limits first - use atomic counter for attempt count
     current_count = AtomicCounter.get(context.counter_table)
@@ -1100,12 +1127,16 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
+  # Liczba prób wykonywanych przez pojedynczy task w jednej rundzie.
+  # Batchowanie ogranicza narzut spawn/yield do jednego na paczkę zamiast na próbę.
+  @attempt_batch_size 200
+
   defp process_simulation_attempts_parallel(%SimulationContext{} = context) do
     # Uruchom wiele wątków równolegle do generowania prób
     tasks =
       Enum.map(1..context.thread_count, fn _thread_id ->
         Task.async(fn ->
-          generate_and_check_attempt(context)
+          run_attempt_batch(context)
         end)
       end)
 
@@ -1114,6 +1145,38 @@ defmodule NumbersEvolution.Simulations do
     match_result = find_match_in_results(results)
 
     handle_parallel_results(match_result, tasks, results, context)
+  end
+
+  defp run_attempt_batch(context) do
+    Enum.reduce_while(1..@attempt_batch_size, :no_match, fn _i, acc ->
+      attempt_batch_step(context, acc)
+    end)
+  end
+
+  defp attempt_batch_step(context, acc) do
+    cond do
+      # Licznik jest współdzielony, więc przekroczenie max_attempts
+      # jest ograniczone do ~thread_count prób, nie thread_count * batch
+      AtomicCounter.get(context.counter_table) >= context.max_attempts ->
+        {:halt, acc}
+
+      # Inny task znalazł już jackpot - nie generuj dalszych prób
+      jackpot_already_found?(context.prize_tiers_table) ->
+        {:halt, acc}
+
+      true ->
+        case generate_and_check_attempt(context) do
+          {:match_found, _generated, _controller} = match -> {:halt, match}
+          _other -> {:cont, :no_match}
+        end
+    end
+  end
+
+  defp jackpot_already_found?(prize_tiers_table) do
+    case :ets.lookup(prize_tiers_table, 1) do
+      [{1, count}] -> count > 0
+      [] -> false
+    end
   end
 
   defp find_match_in_results(results) do
@@ -1128,34 +1191,26 @@ defmodule NumbersEvolution.Simulations do
 
   defp handle_parallel_results({:found, generated, updated_controller}, tasks, _results, context) do
     require Logger
-    # Znaleziono dopasowanie - daj wątkom krótki moment na zapisanie bieżących danych
-    # do tabeli ETS, a potem je zatrzymaj
-    Logger.info("Found match, waiting for tasks to save data...")
-    # Zwiększ do 500ms aby mieć pewność
-    Process.sleep(500)
-
-    # Sprawdź stan tabeli PRZED zabiciem wątków
-    before_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
-    Logger.info("Prize tiers BEFORE killing tasks: #{inspect(before_kill)}")
-
+    # Znaleziono dopasowanie - pozostałe taski same przerywają paczkę
+    # (jackpot_already_found?), daj im krótki moment na dokończenie zapisów ETS
+    Task.yield_many(tasks, 100)
     Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
 
-    # Sprawdź stan tabeli PO zabiciu wątków
-    after_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
-    Logger.info("Prize tiers AFTER killing tasks: #{inspect(after_kill)}")
+    Logger.debug(fn ->
+      "Prize tiers after match: #{inspect(PrizeTiersTracker.get_all(context.prize_tiers_table))}"
+    end)
 
     {:success, AtomicCounter.get(context.counter_table), generated, updated_controller}
   end
 
-  defp handle_parallel_results(nil, _tasks, results, context) do
-    # Brak dopasowania - sprawdź czy wszystkie się zakończyły
-    if all_tasks_completed?(results) do
-      # Wszystkie zakończone bez dopasowania - kontynuuj
-      simulate_until_match(context)
-    else
-      # Niektóre jeszcze trwają - poczekaj i spróbuj ponownie
-      process_simulation_attempts_parallel(context)
+  defp handle_parallel_results(nil, tasks, results, context) do
+    # Brak dopasowania - zatrzymaj ewentualne maruderki zanim ruszy kolejna runda,
+    # żeby taski nie kumulowały się między rundami
+    unless all_tasks_completed?(results) do
+      Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
     end
+
+    simulate_until_match(context)
   end
 
   defp all_tasks_completed?(results) do
@@ -1167,7 +1222,8 @@ defmodule NumbersEvolution.Simulations do
       half_random_mode: context.half_random_mode,
       vip1_mode: context.vip1_mode,
       vip1_pool: context.vip1_pool,
-      vip2_blacklist: context.vip2_blacklist
+      vip2_blacklist: context.vip2_blacklist,
+      pools: context.pools
     ]
 
     case Strategies.Generator.generate_numbers(context.strategy, generator_opts) do
@@ -1224,7 +1280,9 @@ defmodule NumbersEvolution.Simulations do
     )
 
     # Sprawdź wszystkie możliwe stopnie nagród i zlicz je
-    all_tiers = calculate_all_prize_tiers(generated, context.target_numbers)
+    main_matches = count_matches(generated.main, context.target_numbers.main_numbers)
+    euro_matches = count_matches(generated.euro, context.target_numbers.euro_numbers)
+    all_tiers = tiers_for_matches(main_matches, euro_matches)
 
     # Debug log dla jackpota
     if 1 in all_tiers do
@@ -1239,7 +1297,8 @@ defmodule NumbersEvolution.Simulations do
         context.prize_tiers_table,
         tier,
         generated,
-        context.target_numbers
+        main_matches,
+        euro_matches
       )
     end)
 
@@ -1298,13 +1357,21 @@ defmodule NumbersEvolution.Simulations do
     {2, 1} => 12
   }
 
-  # Calculates all prize tiers that match for a given draw.
+  @doc false
+  # Calculates all prize tiers that match for a given draw (public for benchmarks).
   # For example, if someone matches 5+2, they also technically match 5+1, 5+0, 4+2, 4+1, etc.
   # Returns a list of all matching tier numbers.
-  defp calculate_all_prize_tiers(generated, target_numbers) do
+  def calculate_all_prize_tiers(generated, target_numbers) do
     main_matches = count_matches(generated.main, target_numbers.main_numbers)
     euro_matches = count_matches(generated.euro, target_numbers.euro_numbers)
+    tiers_for_matches(main_matches, euro_matches)
+  end
 
+  # No tier exists without at least 1 main match - and a descending 1..0 range
+  # would wrongly count tier 11 (1+2) for a 0-main draw
+  defp tiers_for_matches(0, _euro_matches), do: []
+
+  defp tiers_for_matches(main_matches, euro_matches) do
     # Generate all possible combinations from current matches down to minimum winning combinations
     # Note: euro can be 0 (prizes exist for X+0 combinations)
     for main <- 1..main_matches,
@@ -1313,13 +1380,10 @@ defmodule NumbersEvolution.Simulations do
         tier != nil do
       tier
     end
-    |> Enum.sort()
   end
 
   defp count_matches(generated_list, target_list) do
-    generated_set = MapSet.new(generated_list)
-    target_set = MapSet.new(target_list)
-    MapSet.intersection(generated_set, target_set) |> MapSet.size()
+    Enum.count(generated_list, &(&1 in target_list))
   end
 
   defp broadcast_progress(simulation_id, attempts, start_time, prize_tiers) do
@@ -1422,6 +1486,9 @@ defmodule NumbersEvolution.Simulations do
         |> Ecto.Changeset.put_embed(:result, result_struct)
         |> Repo.update!()
 
+        # Failed runs affect the score too, not only successes
+        update_strategy_performance(strategy.id)
+
       {:error, reason} ->
         result_data = %{
           "reason" => "error",
@@ -1455,17 +1522,21 @@ defmodule NumbersEvolution.Simulations do
   end
 
   defp update_strategy_performance(strategy_id) do
-    # Calculate median attempts from successful simulations
-    successful_simulations =
+    # Median attempts across completed runs (lower = better). Timeouts and
+    # max-attempts runs count with their full attempts_count, so strategies
+    # that keep failing are penalized instead of being scored on lucky wins only
+    completed_attempts =
       from(s in Simulation,
-        where: s.strategy_id == ^strategy_id and s.status == "success",
+        where:
+          s.strategy_id == ^strategy_id and
+            s.status in ["success", "max_attempts_reached", "timeout"],
         select: s.attempts_count,
         order_by: [asc: s.attempts_count]
       )
       |> Repo.all()
 
-    if length(successful_simulations) > 0 do
-      median = calculate_median(successful_simulations)
+    if length(completed_attempts) > 0 do
+      median = calculate_median(completed_attempts)
 
       strategy = Repo.get!(Strategies.Strategy, strategy_id)
 

@@ -37,6 +37,7 @@ defmodule NumbersEvolution.Strategies.Generator do
     vip1_mode = Keyword.get(opts, :vip1_mode, false)
     vip1_pool = Keyword.get(opts, :vip1_pool, nil)
     vip2_blacklist = Keyword.get(opts, :vip2_blacklist, nil)
+    pools = Keyword.get(opts, :pools, nil)
 
     cond do
       vip1_mode and vip1_pool != nil ->
@@ -49,13 +50,28 @@ defmodule NumbersEvolution.Strategies.Generator do
         generate_half_random_strategy(strategy)
 
       true ->
-        generate_numbers_standard(strategy)
+        generate_numbers_standard(strategy, pools)
     end
   end
 
-  defp generate_numbers_standard(%Strategy{rules: rules}) do
-    main_numbers = generate_main_numbers(rules.main_numbers)
-    euro_numbers = generate_euro_numbers(rules.euro_numbers)
+  @doc """
+  Precomputes hot/cold/random pools for the standard generation path.
+
+  Pools depend only on strategy rules, so simulations can build them once
+  and pass them via `opts[:pools]` to `generate_numbers/2` instead of
+  rebuilding MapSets on every attempt.
+  """
+  @spec build_pools(Strategy.t()) :: %{main: map(), euro: map()}
+  def build_pools(%Strategy{rules: rules}) do
+    %{
+      main: build_main_pools(rules.main_numbers),
+      euro: build_euro_pools(rules.euro_numbers)
+    }
+  end
+
+  defp generate_numbers_standard(%Strategy{rules: rules}, pools) do
+    main_numbers = generate_main_numbers(rules.main_numbers, pools[:main])
+    euro_numbers = generate_euro_numbers(rules.euro_numbers, pools[:euro])
 
     result = %{main: Enum.sort(main_numbers), euro: Enum.sort(euro_numbers)}
 
@@ -268,19 +284,22 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   VIP2 applies a runtime-generated blacklist to the strategy and generates numbers
   with VIP1-like constraints (max 2 per decade, 2 odd + 3 even).
+
+  The blacklist is fixed for a whole simulation, so callers running many attempts
+  should precompute the pools once with `prepare_vip2_pools/1` and pass them
+  under the `:pools` key of the blacklist map.
   """
   @spec generate_vip2_numbers(Strategy.t(), map()) ::
           {:ok, %{main: [pos_integer()], euro: [pos_integer()], constraints_met: boolean()}}
   def generate_vip2_numbers(_strategy, blacklist) do
-    # Create available pools by applying blacklist
-    main_available = Enum.reject(1..50, &(&1 in blacklist.main_blacklist))
-    euro_available = Enum.reject(1..12, &(&1 in blacklist.euro_blacklist))
+    pools = Map.get(blacklist, :pools) || prepare_vip2_pools(blacklist)
 
     # Apply VIP1 constraints to main numbers
-    {:ok, main_numbers, constraints_met} = generate_vip1_main_with_constraints(main_available)
+    {:ok, main_numbers, constraints_met} =
+      generate_vip1_main_from_split(pools.main_odd, pools.main_even, pools.main_available)
 
     # Generate euro numbers from available pool
-    euro_numbers = Enum.take_random(euro_available, 2)
+    euro_numbers = Enum.take_random(pools.euro_available, 2)
 
     {:ok,
      %{
@@ -288,6 +307,22 @@ defmodule NumbersEvolution.Strategies.Generator do
        euro: Enum.sort(euro_numbers),
        constraints_met: constraints_met
      }}
+  end
+
+  @doc """
+  Precomputes available pools (with parity split) from a VIP2 blacklist.
+  """
+  @spec prepare_vip2_pools(%{main_blacklist: list(), euro_blacklist: list()}) :: map()
+  def prepare_vip2_pools(blacklist) do
+    main_available = Enum.reject(1..50, &(&1 in blacklist.main_blacklist))
+    euro_available = Enum.reject(1..12, &(&1 in blacklist.euro_blacklist))
+
+    %{
+      main_available: main_available,
+      main_odd: Enum.filter(main_available, &(rem(&1, 2) == 1)),
+      main_even: Enum.filter(main_available, &(rem(&1, 2) == 0)),
+      euro_available: euro_available
+    }
   end
 
   @doc """
@@ -326,6 +361,10 @@ defmodule NumbersEvolution.Strategies.Generator do
     odd_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 1))
     even_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 0))
 
+    generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool)
+  end
+
+  defp generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool) do
     # Try to select exactly 2 odd and 3 even
     selected_odd = Enum.take_random(odd_numbers, min(2, length(odd_numbers)))
     selected_even = Enum.take_random(even_numbers, min(3, length(even_numbers)))
@@ -647,8 +686,8 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   ## Main Numbers (5 from 1-50)
 
-  defp generate_main_numbers(main_rules) do
-    pools = build_main_pools(main_rules)
+  defp generate_main_numbers(main_rules, precomputed_pools) do
+    pools = precomputed_pools || build_main_pools(main_rules)
     [even_count, odd_count] = main_rules.ratio_even_odd
     [low_count, high_count] = main_rules.ratio_low_high
     weights_map = weights_to_map(main_rules.weights, [:hot, :cold, :random])
@@ -858,8 +897,8 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   ## Euro Numbers (2 from 1-12)
 
-  defp generate_euro_numbers(euro_rules) do
-    pools = build_euro_pools(euro_rules)
+  defp generate_euro_numbers(euro_rules, precomputed_pools) do
+    pools = precomputed_pools || build_euro_pools(euro_rules)
     [even_count, odd_count] = euro_rules.ratio_even_odd
     weights_map = weights_to_map(euro_rules.weights, [:hot, :random])
 

@@ -9,7 +9,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(controller)
       assert stats.unique_attempts == 0
-      assert controller.duplicates_count == 0
+      assert stats.duplicates_skipped == 0
     end
   end
 
@@ -23,7 +23,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
       assert stats.unique_attempts == 1
-      assert updated_controller.duplicates_count == 0
+      assert stats.duplicates_skipped == 0
     end
 
     test "returns :duplicate for repeated attempt" do
@@ -39,7 +39,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
       assert stats.unique_attempts == 1
-      assert updated_controller.duplicates_count == 1
+      assert stats.duplicates_skipped == 1
     end
 
     test "treats same numbers in different order as duplicate" do
@@ -57,7 +57,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
       assert stats.unique_attempts == 1
-      assert updated_controller.duplicates_count == 1
+      assert stats.duplicates_skipped == 1
     end
 
     test "treats different numbers as unique" do
@@ -74,7 +74,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
       assert stats.unique_attempts == 2
-      assert updated_controller.duplicates_count == 0
+      assert stats.duplicates_skipped == 0
     end
 
     test "handles multiple duplicates correctly" do
@@ -102,12 +102,12 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
 
       stats = SimulationDuplicateController.get_detailed_stats(updated_controller)
       assert stats.unique_attempts == 2
-      assert updated_controller.duplicates_count == 2
+      assert stats.duplicates_skipped == 2
     end
   end
 
   describe "generate_combination_hash/2" do
-    test "generates consistent hashes for same numbers" do
+    test "generates consistent keys for same numbers" do
       attempt1 = %{main: [1, 7, 23, 34, 50], euro: [3, 9]}
       # same numbers, different order
       attempt2 = %{main: [34, 1, 50, 23, 7], euro: [9, 3]}
@@ -119,9 +119,7 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateControllerTest do
         SimulationDuplicateController.generate_combination_hash(attempt2.main, attempt2.euro)
 
       assert hash1 == hash2
-      assert is_binary(hash1)
-      # MD5 hash length
-      assert String.length(hash1) == 32
+      assert hash1 == {{1, 7, 23, 34, 50}, {3, 9}}
     end
 
     test "generates different hashes for different numbers" do

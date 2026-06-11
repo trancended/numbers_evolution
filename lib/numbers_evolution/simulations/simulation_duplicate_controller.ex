@@ -4,14 +4,19 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
 
   Używa ETS do efektywnego sprawdzania unikalności kombinacji.
   Każda symulacja ma własną tabelę ETS, co zapewnia izolację między symulacjami.
+
+  Licznik duplikatów jest trzymany w samej tabeli ETS (klucz `:dup_count`),
+  dzięki czemu działa poprawnie przy równoległych próbach z wielu procesów —
+  struktura kontrolera jest tylko uchwytem do tabeli.
   """
 
-  defstruct [:table_name, :duplicates_count]
+  defstruct [:table_name]
 
   @type t :: %__MODULE__{
-          table_name: atom(),
-          duplicates_count: non_neg_integer()
+          table_name: atom()
         }
+
+  @dup_count_key :dup_count
 
   @doc """
   Tworzy nowy kontroler duplikatów dla symulacji.
@@ -23,18 +28,16 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
 
     # Utwórz tabelę ETS typu set (bez duplikatów)
     :ets.new(table_name, [:set, :public, :named_table])
+    :ets.insert(table_name, {@dup_count_key, 0})
 
-    %__MODULE__{
-      table_name: table_name,
-      duplicates_count: 0
-    }
+    %__MODULE__{table_name: table_name}
   end
 
   @doc """
-  Sprawdza czy próba jest duplikatem i aktualizuje stan kontrolera.
+  Sprawdza czy próba jest duplikatem i aktualizuje licznik w tabeli ETS.
 
   Returns:
-  - `{:unique, controller}` - próba jest unikalna, kontroler zawiera nową kombinację
+  - `{:unique, controller}` - próba jest unikalna, kombinacja została zapisana
   - `{:duplicate, controller}` - próba jest duplikatem, licznik duplikatów został zwiększony
 
   ## Examples
@@ -42,59 +45,46 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
       iex> controller = SimulationDuplicateController.new()
       iex> attempt = %{main: [1, 7, 23, 34, 50], euro: [3, 9]}
       iex> {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
-      iex> {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
+      iex> {:duplicate, _controller} = SimulationDuplicateController.check_attempt(controller, attempt)
 
   """
   @spec check_attempt(t(), %{main: list(), euro: list()}) :: {:unique | :duplicate, t()}
   def check_attempt(%__MODULE__{} = controller, %{main: main, euro: euro}) do
-    # Generuj hash kombinacji dla efektywnego porównania
-    combination_hash = generate_combination_hash(main, euro)
+    combination_key = generate_combination_hash(main, euro)
 
-    # Sprawdź czy hash już istnieje w tabeli ETS
-    case :ets.lookup(controller.table_name, combination_hash) do
-      [] ->
-        # Unikalna próba - dodajemy do tabeli ETS
-        :ets.insert(controller.table_name, {combination_hash, true})
-        {:unique, controller}
-
-      [_] ->
-        # Duplikat - zwiększamy licznik
-        {:duplicate,
-         %__MODULE__{
-           controller
-           | duplicates_count: controller.duplicates_count + 1
-         }}
+    # insert_new jest atomowy - zwraca false gdy klucz już istnieje,
+    # więc równoległe procesy nie zaliczą tej samej kombinacji dwukrotnie
+    if :ets.insert_new(controller.table_name, {combination_key}) do
+      {:unique, controller}
+    else
+      :ets.update_counter(controller.table_name, @dup_count_key, 1)
+      {:duplicate, controller}
     end
   end
 
   @doc """
-  Generuje hash kombinacji dla efektywnego porównania.
+  Generuje klucz kombinacji dla efektywnego porównania.
 
-  Sortuje liczby aby zapewnić deterministyczny hash niezależny od kolejności.
+  Sortuje liczby aby zapewnić deterministyczny klucz niezależny od kolejności.
+  Krotka posortowanych liczb jest dokładna (zero kolizji) i znacznie tańsza
+  niż hash kryptograficzny.
 
   ## Examples
 
       iex> SimulationDuplicateController.generate_combination_hash([1, 7, 23, 34, 50], [3, 9])
-      "a1b2c3d4e5f6..."
+      {{1, 7, 23, 34, 50}, {3, 9}}
 
       iex> SimulationDuplicateController.generate_combination_hash([34, 1, 50, 23, 7], [9, 3])
-      "a1b2c3d4e5f6..." # taki sam hash dla tych samych liczb
+      {{1, 7, 23, 34, 50}, {3, 9}}
 
   """
-  @spec generate_combination_hash(list(), list()) :: String.t()
+  @spec generate_combination_hash(list(), list()) :: {tuple(), tuple()}
   def generate_combination_hash(main_numbers, euro_numbers)
       when is_list(main_numbers) and is_list(euro_numbers) do
-    # Sortujemy liczby dla deterministycznego hasha
-    sorted_main = Enum.sort(main_numbers)
-    sorted_euro = Enum.sort(euro_numbers)
-
-    # Tworzymy string reprezentację
-    main_str = Enum.join(sorted_main, ",")
-    euro_str = Enum.join(sorted_euro, ",")
-
-    # Generujemy hash
-    :crypto.hash(:md5, "#{main_str}|#{euro_str}")
-    |> Base.encode16(case: :lower)
+    {
+      main_numbers |> Enum.sort() |> List.to_tuple(),
+      euro_numbers |> Enum.sort() |> List.to_tuple()
+    }
   end
 
   @doc """
@@ -102,14 +92,17 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
 
   ## Examples
 
-      iex> controller = %SimulationDuplicateController{duplicates_count: 5}
+      iex> controller = SimulationDuplicateController.new()
+      iex> attempt = %{main: [1, 7, 23, 34, 50], euro: [3, 9]}
+      iex> {:unique, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
+      iex> {:duplicate, controller} = SimulationDuplicateController.check_attempt(controller, attempt)
       iex> SimulationDuplicateController.get_stats(controller)
-      %{duplicates_skipped: 5}
+      %{duplicates_skipped: 1}
 
   """
   @spec get_stats(t()) :: %{duplicates_skipped: non_neg_integer()}
-  def get_stats(%__MODULE__{duplicates_count: count}) do
-    %{duplicates_skipped: count}
+  def get_stats(%__MODULE__{table_name: table_name}) do
+    %{duplicates_skipped: duplicates_count(table_name)}
   end
 
   @doc """
@@ -135,19 +128,27 @@ defmodule NumbersEvolution.Simulations.SimulationDuplicateController do
           total_attempts: non_neg_integer(),
           duplicate_ratio: float()
         }
-  def get_detailed_stats(%__MODULE__{
-        table_name: table_name,
-        duplicates_count: duplicates_count
-      }) do
-    unique_attempts = :ets.info(table_name, :size)
-    total_attempts = unique_attempts + duplicates_count
-    duplicate_ratio = if unique_attempts > 0, do: duplicates_count / unique_attempts, else: 0.0
+  def get_detailed_stats(%__MODULE__{table_name: table_name}) do
+    duplicates_skipped = duplicates_count(table_name)
+    # Rozmiar tabeli zawiera wpis licznika duplikatów
+    unique_attempts = max(:ets.info(table_name, :size) - 1, 0)
+    total_attempts = unique_attempts + duplicates_skipped
+
+    duplicate_ratio =
+      if unique_attempts > 0, do: duplicates_skipped / unique_attempts, else: 0.0
 
     %{
-      duplicates_skipped: duplicates_count,
+      duplicates_skipped: duplicates_skipped,
       unique_attempts: unique_attempts,
       total_attempts: total_attempts,
       duplicate_ratio: duplicate_ratio
     }
+  end
+
+  defp duplicates_count(table_name) do
+    case :ets.lookup(table_name, @dup_count_key) do
+      [{@dup_count_key, count}] -> count
+      [] -> 0
+    end
   end
 end
