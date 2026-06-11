@@ -1486,6 +1486,9 @@ defmodule NumbersEvolution.Simulations do
         |> Ecto.Changeset.put_embed(:result, result_struct)
         |> Repo.update!()
 
+        # Failed runs affect the score too, not only successes
+        update_strategy_performance(strategy.id)
+
       {:error, reason} ->
         result_data = %{
           "reason" => "error",
@@ -1519,17 +1522,21 @@ defmodule NumbersEvolution.Simulations do
   end
 
   defp update_strategy_performance(strategy_id) do
-    # Calculate median attempts from successful simulations
-    successful_simulations =
+    # Median attempts across completed runs (lower = better). Timeouts and
+    # max-attempts runs count with their full attempts_count, so strategies
+    # that keep failing are penalized instead of being scored on lucky wins only
+    completed_attempts =
       from(s in Simulation,
-        where: s.strategy_id == ^strategy_id and s.status == "success",
+        where:
+          s.strategy_id == ^strategy_id and
+            s.status in ["success", "max_attempts_reached", "timeout"],
         select: s.attempts_count,
         order_by: [asc: s.attempts_count]
       )
       |> Repo.all()
 
-    if length(successful_simulations) > 0 do
-      median = calculate_median(successful_simulations)
+    if length(completed_attempts) > 0 do
+      median = calculate_median(completed_attempts)
 
       strategy = Repo.get!(Strategies.Strategy, strategy_id)
 

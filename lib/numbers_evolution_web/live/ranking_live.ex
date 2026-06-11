@@ -4,7 +4,7 @@ defmodule NumbersEvolutionWeb.RankingLive do
   """
   use NumbersEvolutionWeb, :live_view
 
-  alias NumbersEvolution.{Accounts, Strategies}
+  alias NumbersEvolution.{Accounts, Analytics, Strategies}
 
   import NumbersEvolutionWeb.RankingComponents
 
@@ -58,12 +58,17 @@ defmodule NumbersEvolutionWeb.RankingLive do
   defp load_ranking(socket) do
     user = socket.assigns.current_user
 
+    # performance_score is the median attempts to jackpot - lower is better
     strategies =
       if user,
-        do: Strategies.list_strategies(user, sort: "performance_score", order: "desc"),
+        do: Strategies.list_strategies(user, sort: "performance_score", order: "asc"),
         else: []
 
-    assign(socket, :strategies, strategies)
+    strategy_stats = if user, do: Analytics.strategy_stats(user), else: []
+
+    socket
+    |> assign(:strategies, strategies)
+    |> assign(:strategy_stats, strategy_stats)
   end
 
   # ============================================================================
@@ -92,7 +97,7 @@ defmodule NumbersEvolutionWeb.RankingLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_scope={:ranking}>
       <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <.ranking_section strategies={@strategies} />
+        <.ranking_section strategies={@strategies} strategy_stats={@strategy_stats} />
       </main>
     </Layouts.app>
     """
