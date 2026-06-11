@@ -11,17 +11,19 @@ defmodule NumbersEvolution.Application do
     :ets.new(:rate_limiter, [:set, :public, :named_table])
     :ets.insert(:rate_limiter, {:last_request, System.system_time(:second)})
 
-    children = [
-      NumbersEvolutionWeb.Telemetry,
-      NumbersEvolution.Repo,
-      {DNSCluster, query: Application.get_env(:numbers_evolution, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: NumbersEvolution.PubSub},
-      {Task.Supervisor, name: NumbersEvolution.TaskSupervisor, max_children: :infinity},
-      # Start a worker by calling: NumbersEvolution.Worker.start_link(arg)
-      # {NumbersEvolution.Worker, arg},
-      # Start to serve requests, typically the last entry
-      NumbersEvolutionWeb.Endpoint
-    ]
+    children =
+      [
+        NumbersEvolutionWeb.Telemetry,
+        NumbersEvolution.Repo,
+        {DNSCluster,
+         query: Application.get_env(:numbers_evolution, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: NumbersEvolution.PubSub},
+        {Task.Supervisor, name: NumbersEvolution.TaskSupervisor, max_children: :infinity},
+        # Start a worker by calling: NumbersEvolution.Worker.start_link(arg)
+        # {NumbersEvolution.Worker, arg},
+        # Start to serve requests, typically the last entry
+        NumbersEvolutionWeb.Endpoint
+      ] ++ auto_importer_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -37,6 +39,16 @@ defmodule NumbersEvolution.Application do
       # Note: E2E tests handle database setup via API endpoints
 
       {:ok, pid}
+    end
+  end
+
+  # Periodic draw import (Lotto archive backfill + latest Eurojackpot);
+  # enabled in dev/prod via config, disabled in tests
+  defp auto_importer_child do
+    if Application.get_env(:numbers_evolution, :auto_import_draws, false) do
+      [NumbersEvolution.Draws.AutoImporter]
+    else
+      []
     end
   end
 

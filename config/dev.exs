@@ -117,3 +117,7 @@ config :numbers_evolution, :openrouter,
   default_model: "openai/gpt-4o-mini",
   timeout: 30_000,
   rate_limit_per_hour: 100
+
+# Automatically import draws (Lotto archive backfill + latest Eurojackpot)
+# shortly after boot and periodically
+config :numbers_evolution, auto_import_draws: true

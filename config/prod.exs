@@ -17,3 +17,7 @@ config :logger, level: :info
 
 # Runtime production configuration, including reading
 # of environment variables, is done on config/runtime.exs.
+
+# Automatically import draws (Lotto archive backfill + latest Eurojackpot)
+# shortly after boot and periodically
+config :numbers_evolution, auto_import_draws: true
