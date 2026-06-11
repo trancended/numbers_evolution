@@ -382,9 +382,10 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  # Generate VIP2 blacklist if strategy is VIP2 (auto-blacklist)
+  # Generate auto-blacklist when explicitly requested via options, or for
+  # legacy VIP2 strategies (detected by name + empty blacklist)
   defp maybe_generate_vip2_blacklist(attrs, strategy, target_draw) do
-    if vip2_strategy?(strategy) do
+    if parse_boolean(attrs["auto_blacklist"], false) or vip2_strategy?(strategy) do
       generate_vip2_blacklist(attrs, target_draw)
     else
       {:ok, attrs}
@@ -401,21 +402,34 @@ defmodule NumbersEvolution.Simulations do
     is_empty_blacklist and is_vip2_name
   end
 
-  # Generate random blacklist for VIP2 and validate against target numbers
+  # Generate random blacklist that never blocks the target numbers.
+  # Sampling from non-target numbers is equivalent to "retry random blacklists
+  # until none blocks the target" (the intentional look-ahead semantics), but
+  # always succeeds and works for any configurable size.
   defp generate_vip2_blacklist(attrs, target_draw) do
     alias NumbersEvolution.Strategies.Generator
 
     target_main = target_draw.numbers.main_numbers
     target_euro = target_draw.numbers.euro_numbers
+    respect_rules = parse_boolean(attrs["auto_blacklist_respect_rules"], false)
 
-    # First, validate that target numbers meet VIP constraints
-    case Generator.validate_vip_constraints(target_main, target_euro) do
+    # The VIP2 generator enforces VIP constraints (2 odd + 3 even, max 2 per
+    # decade), so the target must satisfy them - except in respect-rules mode,
+    # which generates through the standard path
+    constraints_check =
+      if respect_rules,
+        do: :ok,
+        else: Generator.validate_vip_constraints(target_main, target_euro)
+
+    case constraints_check do
       :ok ->
-        # Target meets constraints, try generating blacklist with retry
-        generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, 100)
+        main_size = parse_blacklist_size(attrs["auto_blacklist_main_size"], 25, 45)
+        euro_size = parse_blacklist_size(attrs["auto_blacklist_euro_size"], 6, 10)
+        blacklist = generate_auto_blacklist(target_main, target_euro, main_size, euro_size)
+
+        {:ok, Map.put(attrs, "vip2_blacklist", blacklist)}
 
       {:error, constraint_errors} ->
-        # Target numbers don't meet VIP constraints
         {:error,
          %{
            type: :vip_constraints_not_met,
@@ -427,50 +441,24 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
-  # Retry VIP2 blacklist generation up to max_attempts times
-  defp generate_vip2_blacklist_with_retry(attrs, target_main, target_euro, max_attempts) do
-    all_main = 1..50 |> Enum.to_list()
-    all_euro = 1..12 |> Enum.to_list()
-
-    Enum.reduce_while(1..max_attempts, nil, fn attempt, _acc ->
-      main_blacklist = Enum.take_random(all_main, 25)
-      euro_blacklist = Enum.take_random(all_euro, 6)
-
-      blocked_main = Enum.filter(target_main, &(&1 in main_blacklist))
-      blocked_euro = Enum.filter(target_euro, &(&1 in euro_blacklist))
-
-      if Enum.empty?(blocked_main) and Enum.empty?(blocked_euro) do
-        success_vip2_blacklist(attrs, main_blacklist, euro_blacklist)
-      else
-        handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro)
-      end
-    end)
+  # Blacklist size must leave the 5 target + at least 5 free pickable main
+  # numbers (and 2 + 2 euro), hence the caps of 45 and 10
+  defp parse_blacklist_size(value, default, max) do
+    value |> parse_int(default) |> min(max) |> max(0)
   end
 
-  defp success_vip2_blacklist(attrs, main_blacklist, euro_blacklist) do
-    attrs_with_vip2 =
-      Map.put(attrs, "vip2_blacklist", %{
-        "main_blacklist" => main_blacklist,
-        "euro_blacklist" => euro_blacklist
-      })
-
-    {:halt, {:ok, attrs_with_vip2}}
-  end
-
-  defp handle_vip2_blacklist_retry(attempt, max_attempts, target_main, target_euro) do
-    if attempt == max_attempts do
-      {:halt,
-       {:error,
-        %{
-          type: :vip2_blacklist_generation_failed,
-          message:
-            "Nie udało się wygenerować prawidłowego blacklistu VIP2 po #{max_attempts} próbach",
-          target_main: target_main,
-          target_euro: target_euro
-        }}}
-    else
-      {:cont, nil}
-    end
+  @doc """
+  Generates a random auto-blacklist that never blocks the target numbers
+  (the intentional look-ahead semantics of VIP2-style simulations).
+  """
+  @spec generate_auto_blacklist(list(), list(), non_neg_integer(), non_neg_integer()) :: map()
+  def generate_auto_blacklist(target_main, target_euro, main_size, euro_size) do
+    %{
+      "main_blacklist" => Enum.take_random(Enum.to_list(1..50) -- target_main, main_size),
+      "euro_blacklist" => Enum.take_random(Enum.to_list(1..12) -- target_euro, euro_size),
+      "main_size" => main_size,
+      "euro_size" => euro_size
+    }
   end
 
   @doc """
@@ -840,13 +828,17 @@ defmodule NumbersEvolution.Simulations do
     half_random_mode = parse_boolean(attrs["half_random_mode"], false)
     vip1_mode = parse_boolean(attrs["vip1_mode"], false)
     thread_count = parse_int(attrs["thread_count"], 10)
+    auto_blacklist = parse_boolean(attrs["auto_blacklist"], false)
+    auto_blacklist_respect_rules = parse_boolean(attrs["auto_blacklist_respect_rules"], false)
 
     base_options = %{
       "max_attempts" => max_attempts,
       "timeout_seconds" => timeout_seconds,
       "half_random_mode" => half_random_mode,
       "vip1_mode" => vip1_mode,
-      "thread_count" => thread_count
+      "thread_count" => thread_count,
+      "auto_blacklist" => auto_blacklist,
+      "auto_blacklist_respect_rules" => auto_blacklist_respect_rules
     }
 
     # Add VIP1 pool if provided
@@ -988,43 +980,10 @@ defmodule NumbersEvolution.Simulations do
       # Run simulation loop
       half_random_mode = Map.get(options, "half_random_mode", false)
       vip1_mode = Map.get(options, "vip1_mode", false)
-      vip1_pool = Map.get(options, "vip1_pool")
-      vip2_blacklist = Map.get(options, "vip2_blacklist")
       thread_count = Map.get(options, "thread_count", 10)
 
-      # Convert VIP1 pool to the format expected by Generator
-      vip1_pool_converted =
-        if vip1_pool do
-          %{
-            main_pool: vip1_pool["main_pool"],
-            euro_pool: vip1_pool["euro_pool"]
-          }
-        else
-          nil
-        end
-
-      # Convert VIP2 blacklist to the format expected by Generator and
-      # precompute its pools once - the blacklist is fixed for the whole simulation
-      vip2_blacklist_converted =
-        if vip2_blacklist do
-          blacklist = %{
-            main_blacklist: vip2_blacklist["main_blacklist"],
-            euro_blacklist: vip2_blacklist["euro_blacklist"]
-          }
-
-          Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist))
-        else
-          nil
-        end
-
-      # Standard path: hot/cold/random pools depend only on the rules,
-      # so build them once instead of on every attempt
-      pools =
-        if is_nil(vip1_pool_converted) and is_nil(vip2_blacklist_converted) do
-          Strategies.Generator.build_pools(strategy)
-        else
-          nil
-        end
+      {strategy, vip1_pool_converted, vip2_blacklist_converted, pools} =
+        prepare_generation_modes(strategy, options)
 
       context = %SimulationContext{
         strategy: strategy,
@@ -1084,6 +1043,70 @@ defmodule NumbersEvolution.Simulations do
           _ -> :ok
         end
     end
+  end
+
+  # Converts persisted simulation options into generator inputs, precomputing
+  # everything that stays fixed for the whole simulation:
+  # - VIP1 pool conversion (string keys -> atoms)
+  # - auto-blacklist: respect-rules mode merges the blacklist into the strategy
+  #   rules (standard path, strategy preferences apply); VIP2 mode (default)
+  #   converts the blacklist and precomputes its pools
+  # - standard path: hot/cold/random pools built once instead of per attempt
+  defp prepare_generation_modes(strategy, options) do
+    vip1_pool = Map.get(options, "vip1_pool")
+    vip2_blacklist = Map.get(options, "vip2_blacklist")
+    respect_rules = Map.get(options, "auto_blacklist_respect_rules", false)
+
+    vip1_pool_converted =
+      if vip1_pool do
+        %{main_pool: vip1_pool["main_pool"], euro_pool: vip1_pool["euro_pool"]}
+      end
+
+    {strategy, vip2_blacklist_converted} =
+      cond do
+        vip2_blacklist && respect_rules ->
+          {merge_auto_blacklist_into_rules(strategy, vip2_blacklist), nil}
+
+        vip2_blacklist ->
+          blacklist = %{
+            main_blacklist: vip2_blacklist["main_blacklist"],
+            euro_blacklist: vip2_blacklist["euro_blacklist"]
+          }
+
+          {strategy,
+           Map.put(blacklist, :pools, Strategies.Generator.prepare_vip2_pools(blacklist))}
+
+        true ->
+          {strategy, nil}
+      end
+
+    pools =
+      if is_nil(vip1_pool_converted) and is_nil(vip2_blacklist_converted) do
+        Strategies.Generator.build_pools(strategy)
+      end
+
+    {strategy, vip1_pool_converted, vip2_blacklist_converted, pools}
+  end
+
+  # Merges the auto-generated blacklist into the strategy's own blacklists,
+  # so the standard generator (and its pools) excludes those numbers while
+  # still honoring the strategy's hot/cold/ratio preferences
+  defp merge_auto_blacklist_into_rules(strategy, vip2_blacklist) do
+    rules = strategy.rules
+
+    main_numbers = %{
+      rules.main_numbers
+      | blacklist:
+          Enum.uniq((rules.main_numbers.blacklist || []) ++ vip2_blacklist["main_blacklist"])
+    }
+
+    euro_numbers = %{
+      rules.euro_numbers
+      | blacklist:
+          Enum.uniq((rules.euro_numbers.blacklist || []) ++ vip2_blacklist["euro_blacklist"])
+    }
+
+    %{strategy | rules: %{rules | main_numbers: main_numbers, euro_numbers: euro_numbers}}
   end
 
   defp simulate_until_match(%SimulationContext{} = context) do

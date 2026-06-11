@@ -348,6 +348,68 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
               </div>
             </label>
           </div>
+
+          <div class="bg-secondary/10 p-3 rounded-lg border border-secondary/30 hover:border-secondary/50 transition-colors duration-200">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                id="auto_blacklist_checkbox"
+                name="auto_blacklist"
+                value="true"
+                class="checkbox checkbox-secondary checkbox-sm mt-0.5"
+              />
+              <div class="flex-1">
+                <div class="font-semibold text-secondary text-sm mb-1.5 flex items-center gap-2">
+                  🚫 Auto-blacklist (tryb VIP2+)
+                </div>
+                <div class="text-xs text-base-content/80 leading-relaxed">
+                  Losowo wyklucza część liczb przed startem - blacklist nigdy nie blokuje
+                  poszukiwanych liczb. Działa dla każdej strategii.
+                  Presety: VIP2 = 25/6, VIP3 (agresywny) = 35/8.
+                </div>
+              </div>
+            </label>
+            <div class="grid grid-cols-2 gap-3 mt-3 pl-8">
+              <div class="form-control">
+                <label class="label py-0.5">
+                  <span class="label-text-alt text-xs">Wykluczone główne (0-45)</span>
+                </label>
+                <input
+                  type="number"
+                  name="auto_blacklist_main_size"
+                  class="input input-bordered input-sm w-full"
+                  placeholder="25"
+                  min="0"
+                  max="45"
+                />
+              </div>
+              <div class="form-control">
+                <label class="label py-0.5">
+                  <span class="label-text-alt text-xs">Wykluczone euro (0-10)</span>
+                </label>
+                <input
+                  type="number"
+                  name="auto_blacklist_euro_size"
+                  class="input input-bordered input-sm w-full"
+                  placeholder="6"
+                  min="0"
+                  max="10"
+                />
+              </div>
+            </div>
+            <label class="flex items-start gap-3 cursor-pointer mt-3 pl-8">
+              <input
+                type="checkbox"
+                name="auto_blacklist_respect_rules"
+                value="true"
+                class="checkbox checkbox-secondary checkbox-xs mt-0.5"
+              />
+              <div class="text-xs text-base-content/70 leading-relaxed">
+                Respektuj reguły strategii (hot/cold, proporcje) zamiast czystego losowania VIP -
+                blacklist zostanie scalony z regułami strategii
+              </div>
+            </label>
+          </div>
         </div>
       </details>
     </div>
@@ -423,6 +485,13 @@ defmodule NumbersEvolutionWeb.SimulationComponents do
           </span>
           <%= if @simulation.options && @simulation.options["vip1_mode"] do %>
             <span class="badge badge-warning badge-xs">🎰 VIP1</span>
+          <% end %>
+          <%= if @simulation.options && @simulation.options["vip2_blacklist"] do %>
+            <span class="badge badge-secondary badge-xs">
+              🚫 Auto-BL {length(@simulation.options["vip2_blacklist"]["main_blacklist"] || [])}/{length(
+                @simulation.options["vip2_blacklist"]["euro_blacklist"] || []
+              )}
+            </span>
           <% end %>
         </div>
       </td>
