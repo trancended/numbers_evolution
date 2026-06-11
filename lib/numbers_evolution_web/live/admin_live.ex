@@ -70,6 +70,21 @@ defmodule NumbersEvolutionWeb.AdminLive do
         {:ok, :already_exists} ->
           put_flash(socket, :info, "Najnowsze losowanie #{game_label} jest już w bazie")
 
+        {:ok, :history_imported, %{imported: 0, total: total}} ->
+          put_flash(
+            socket,
+            :info,
+            "Wszystkie #{total} losowań #{game_label} z archiwum jest już w bazie"
+          )
+
+        {:ok, :history_imported, %{imported: imported, total: total}} ->
+          socket
+          |> put_flash(
+            :info,
+            "Zaimportowano #{imported} losowań #{game_label} z archiwum (łącznie #{total})"
+          )
+          |> assign(:latest_draws, load_latest_draws())
+
         {:error, reason} ->
           put_flash(socket, :error, "Import #{game_label} nie powiódł się: #{inspect(reason)}")
       end

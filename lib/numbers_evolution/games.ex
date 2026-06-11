@@ -31,7 +31,10 @@ defmodule NumbersEvolution.Games do
             blacklist_bonus: non_neg_integer()
           },
           search_space: pos_integer(),
-          import: %{api_path: String.t()} | nil
+          import:
+            %{type: :lottoland, api_path: String.t()}
+            | %{type: :archive, url: String.t()}
+            | nil
         }
 
   @games %{
@@ -76,7 +79,7 @@ defmodule NumbersEvolution.Games do
       },
       # C(50,5) * C(12,2)
       search_space: 139_838_160,
-      import: %{api_path: "euroJackpot"}
+      import: %{type: :lottoland, api_path: "euroJackpot"}
     },
     "lotto" => %{
       id: "lotto",
@@ -105,7 +108,11 @@ defmodule NumbersEvolution.Games do
       },
       # C(49,6)
       search_space: 13_983_816,
-      import: %{api_path: "polishLotto"}
+      # Full draw archive since 1957, one line per draw, updated after each
+      # drawing. Lottoland's polishLotto endpoint is unreliable: between draws
+      # its "last" points at the upcoming drawing with numbers: nil.
+      # HTTPS on mbnet serves a mismatched certificate, hence plain HTTP.
+      import: %{type: :archive, url: "http://www.mbnet.com.pl/dl.txt"}
     }
   }
 
