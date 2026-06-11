@@ -10,6 +10,12 @@
 #   coordination: plain loop         20000 attempts in  387.6 ms ->  51602 attempts/sec
 # Conclusion: per-attempt Task spawn overhead is negligible on BEAM; the per-attempt
 # pipeline cost (generator above all) dominates.
+#
+# After Phase 1 (2026-06-11):
+#   pipeline: standard              200000 attempts in 2787.9 ms ->  71737 attempts/sec (+39%)
+#   pipeline: vip2                  200000 attempts in 1100.4 ms -> 181757 attempts/sec (+58%)
+# Plus, not visible here: successful simulations no longer pay a fixed
+# Process.sleep(500) and per-round Logger.info with full tier-map inspects.
 
 Code.require_file("support.exs", __DIR__)
 

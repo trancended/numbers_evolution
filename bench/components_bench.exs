@@ -8,6 +8,13 @@
 #   generator: vip2                   160.54 K ips    6.23 μs
 #   generator: half_random             90.86 K ips   11.01 μs
 #   generator: standard                60.73 K ips   16.47 μs
+#
+# After Phase 1 (2026-06-11):
+#   dedup: check (duplicate hit)               4787.97 K ips    0.21 μs  (4.8x)
+#   dedup: check (mostly unique)               1489.30 K ips    0.67 μs  (2.7x)
+#   generator: vip2 (precomputed pools)         245.06 K ips    4.08 μs  (1.5x)
+#   generator: standard (precomputed pools)     86.88 K ips    11.51 μs  (1.4x)
+#   generator: half_random                      98.13 K ips    10.19 μs  (unchanged path)
 
 Code.require_file("support.exs", __DIR__)
 

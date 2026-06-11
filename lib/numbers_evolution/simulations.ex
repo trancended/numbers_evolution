@@ -990,7 +990,7 @@ defmodule NumbersEvolution.Simulations do
       vip1_mode = Map.get(options, "vip1_mode", false)
       vip1_pool = Map.get(options, "vip1_pool")
       vip2_blacklist = Map.get(options, "vip2_blacklist")
-      thread_count = Map.get(options, "thread_count", 48)
+      thread_count = Map.get(options, "thread_count", 10)
 
       # Convert VIP1 pool to the format expected by Generator
       vip1_pool_converted =
@@ -1104,12 +1104,16 @@ defmodule NumbersEvolution.Simulations do
     end
   end
 
+  # Liczba prób wykonywanych przez pojedynczy task w jednej rundzie.
+  # Batchowanie ogranicza narzut spawn/yield do jednego na paczkę zamiast na próbę.
+  @attempt_batch_size 200
+
   defp process_simulation_attempts_parallel(%SimulationContext{} = context) do
     # Uruchom wiele wątków równolegle do generowania prób
     tasks =
       Enum.map(1..context.thread_count, fn _thread_id ->
         Task.async(fn ->
-          generate_and_check_attempt(context)
+          run_attempt_batch(context)
         end)
       end)
 
@@ -1118,6 +1122,38 @@ defmodule NumbersEvolution.Simulations do
     match_result = find_match_in_results(results)
 
     handle_parallel_results(match_result, tasks, results, context)
+  end
+
+  defp run_attempt_batch(context) do
+    Enum.reduce_while(1..@attempt_batch_size, :no_match, fn _i, acc ->
+      attempt_batch_step(context, acc)
+    end)
+  end
+
+  defp attempt_batch_step(context, acc) do
+    cond do
+      # Licznik jest współdzielony, więc przekroczenie max_attempts
+      # jest ograniczone do ~thread_count prób, nie thread_count * batch
+      AtomicCounter.get(context.counter_table) >= context.max_attempts ->
+        {:halt, acc}
+
+      # Inny task znalazł już jackpot - nie generuj dalszych prób
+      jackpot_already_found?(context.prize_tiers_table) ->
+        {:halt, acc}
+
+      true ->
+        case generate_and_check_attempt(context) do
+          {:match_found, _generated, _controller} = match -> {:halt, match}
+          _other -> {:cont, :no_match}
+        end
+    end
+  end
+
+  defp jackpot_already_found?(prize_tiers_table) do
+    case :ets.lookup(prize_tiers_table, 1) do
+      [{1, count}] -> count > 0
+      [] -> false
+    end
   end
 
   defp find_match_in_results(results) do
@@ -1132,34 +1168,26 @@ defmodule NumbersEvolution.Simulations do
 
   defp handle_parallel_results({:found, generated, updated_controller}, tasks, _results, context) do
     require Logger
-    # Znaleziono dopasowanie - daj wątkom krótki moment na zapisanie bieżących danych
-    # do tabeli ETS, a potem je zatrzymaj
-    Logger.info("Found match, waiting for tasks to save data...")
-    # Zwiększ do 500ms aby mieć pewność
-    Process.sleep(500)
-
-    # Sprawdź stan tabeli PRZED zabiciem wątków
-    before_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
-    Logger.info("Prize tiers BEFORE killing tasks: #{inspect(before_kill)}")
-
+    # Znaleziono dopasowanie - pozostałe taski same przerywają paczkę
+    # (jackpot_already_found?), daj im krótki moment na dokończenie zapisów ETS
+    Task.yield_many(tasks, 100)
     Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
 
-    # Sprawdź stan tabeli PO zabiciu wątków
-    after_kill = PrizeTiersTracker.get_all(context.prize_tiers_table)
-    Logger.info("Prize tiers AFTER killing tasks: #{inspect(after_kill)}")
+    Logger.debug(fn ->
+      "Prize tiers after match: #{inspect(PrizeTiersTracker.get_all(context.prize_tiers_table))}"
+    end)
 
     {:success, AtomicCounter.get(context.counter_table), generated, updated_controller}
   end
 
-  defp handle_parallel_results(nil, _tasks, results, context) do
-    # Brak dopasowania - sprawdź czy wszystkie się zakończyły
-    if all_tasks_completed?(results) do
-      # Wszystkie zakończone bez dopasowania - kontynuuj
-      simulate_until_match(context)
-    else
-      # Niektóre jeszcze trwają - poczekaj i spróbuj ponownie
-      process_simulation_attempts_parallel(context)
+  defp handle_parallel_results(nil, tasks, results, context) do
+    # Brak dopasowania - zatrzymaj ewentualne maruderki zanim ruszy kolejna runda,
+    # żeby taski nie kumulowały się między rundami
+    unless all_tasks_completed?(results) do
+      Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
     end
+
+    simulate_until_match(context)
   end
 
   defp all_tasks_completed?(results) do
