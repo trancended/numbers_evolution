@@ -174,8 +174,8 @@ jobs:
         MIX_ENV: test
         DATABASE_URL: postgres://postgres:postgres@localhost:5435/numbers_evolution_test
 
-  # E2E tests removed from PR checks - they run in ci.yml on main branch
-  # or can be triggered manually via e2e.yml workflow
+  # E2E tests removed from PR checks - they are manual-only (not required):
+  # trigger them via the e2e.yml workflow or "Run workflow" on ci.yml
   
   e2e-test-skipped:
     name: E2E Tests (Run manually via e2e.yml)

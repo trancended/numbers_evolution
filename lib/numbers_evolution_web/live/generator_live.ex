@@ -4,7 +4,7 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
   """
   use NumbersEvolutionWeb, :live_view
 
-  alias NumbersEvolution.{Accounts, Strategies}
+  alias NumbersEvolution.{Accounts, Games, Strategies}
   alias NumbersEvolution.Strategies.Generator
 
   import NumbersEvolutionWeb.GeneratorComponents
@@ -25,6 +25,7 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
         |> assign(:active_section, :generator)
         |> assign(:generated_coupons, [])
         |> assign(:selected_strategy_id, nil)
+        |> assign(:selected_game, Games.default_id())
         |> assign(:coupons_count, 3)
         |> load_generator_data()
 
@@ -58,15 +59,17 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
   @impl true
   def handle_event("generate_coupons", params, socket) do
     %{"strategy_id" => strategy_id, "coupons_count" => count_str} = params
+    game_id = valid_game(params["game_type"])
 
     with {count, _} <- Integer.parse(count_str),
          strategy when not is_nil(strategy) <- find_strategy(socket, strategy_id) do
-      case generate_coupons_for_strategy(strategy, count) do
+      case generate_coupons_for_strategy(strategy, count, game_id) do
         {:ok, coupons} ->
           {:noreply,
            socket
            |> assign(:generated_coupons, coupons)
            |> assign(:selected_strategy_id, strategy_id)
+           |> assign(:selected_game, game_id)
            |> assign(:coupons_count, count)}
 
         {:error, _} ->
@@ -82,11 +85,12 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
   def handle_event("regenerate_coupons", _params, socket) do
     strategy_id = socket.assigns[:selected_strategy_id]
     count = socket.assigns[:coupons_count] || 3
+    game_id = socket.assigns[:selected_game] || Games.default_id()
 
     if strategy_id do
       strategy = find_strategy(socket, strategy_id)
 
-      case generate_coupons_for_strategy(strategy, count) do
+      case generate_coupons_for_strategy(strategy, count, game_id) do
         {:ok, coupons} ->
           {:noreply, assign(socket, :generated_coupons, coupons)}
 
@@ -123,11 +127,16 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
     Enum.find(socket.assigns[:top_strategies] || [], fn s -> s.id == strategy_id end)
   end
 
-  defp generate_coupons_for_strategy(strategy, count) when count >= 1 and count <= 10 do
+  defp valid_game(game_id) do
+    if is_binary(game_id) and Games.supported?(game_id), do: game_id, else: Games.default_id()
+  end
+
+  defp generate_coupons_for_strategy(strategy, count, game_id)
+       when count >= 1 and count <= 10 do
     coupons =
       1..count
       |> Enum.map(fn _ ->
-        case Generator.generate_numbers(strategy) do
+        case Generator.generate_numbers(strategy, game: game_id) do
           {:ok, numbers} ->
             %{
               main_numbers: numbers.main,
@@ -147,7 +156,7 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
     end
   end
 
-  defp generate_coupons_for_strategy(_strategy, _count), do: {:error, :invalid_count}
+  defp generate_coupons_for_strategy(_strategy, _count, _game_id), do: {:error, :invalid_count}
 
   # ============================================================================
   # Private Functions - Authentication
@@ -178,6 +187,7 @@ defmodule NumbersEvolutionWeb.GeneratorLive do
         <.generator_section
           top_strategies={@top_strategies}
           generated_coupons={@generated_coupons}
+          selected_game={@selected_game}
         />
       </main>
     </Layouts.app>

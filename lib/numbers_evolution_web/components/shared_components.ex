@@ -69,4 +69,28 @@ defmodule NumbersEvolutionWeb.SharedComponents do
   end
 
   def format_prize_description(_), do: "nieznany"
+
+  @doc """
+  Get description for a prize tier of a specific game
+  (e.g., "(5+2)" for Eurojackpot tier 1, "(6)" for Lotto tier 1).
+  """
+  def format_prize_description(tier, game) when is_integer(tier) do
+    matches =
+      Enum.find_value(game.prize_tiers, fn {matches, t} -> if t == tier, do: matches end)
+
+    case matches do
+      {main, _euro} when game.bonus.count == 0 -> "(#{main})"
+      {main, euro} -> "(#{main}+#{euro})"
+      nil -> "nieznany"
+    end
+  end
+
+  def format_prize_description(_, _game), do: "nieznany"
+
+  @doc """
+  Sorted list of prize tier numbers for a game (Eurojackpot: 1..12, Lotto: 1..4).
+  """
+  def tier_numbers(game) do
+    game.prize_tiers |> Map.values() |> Enum.sort()
+  end
 end

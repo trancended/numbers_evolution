@@ -4,7 +4,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
   """
   use NumbersEvolutionWeb, :live_view
 
-  alias NumbersEvolution.{Accounts, Draws, Simulations, Strategies}
+  alias NumbersEvolution.{Accounts, Draws, Games, Simulations, Strategies}
   alias NumbersEvolution.Strategies.Generator
   alias NumbersEvolutionWeb.SimulationHelpers
 
@@ -41,6 +41,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
         |> assign(:strategy_pools, %{})
         |> assign(:target_validation_error, nil)
         |> assign(:half_random_mode, false)
+        |> assign(:selected_game, Games.default_id())
         |> load_simulations()
         |> subscribe_to_running_simulations()
 
@@ -77,14 +78,21 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
 
   @impl true
   def handle_event("strategy_changed", %{"strategy_id" => strategy_id}, socket) do
+    game_id = selected_game(socket)
+
     socket =
       if strategy_id != "" do
         strategy = Strategies.get_strategy!(socket.assigns.current_user, strategy_id)
         half_random_mode = socket.assigns.half_random_mode
-        pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_mode)
+
+        pools =
+          Generator.get_strategy_pools(strategy,
+            half_random_mode: half_random_mode,
+            game: game_id
+          )
 
         # Filter draws if strategy is VIP (requires constraints)
-        all_draws = Draws.list_draws(limit: 50)
+        all_draws = Draws.list_draws(limit: 50, game_type: game_id)
         filtered_draws = filter_draws_for_strategy(all_draws, strategy)
 
         socket
@@ -94,7 +102,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
         |> assign(:target_validation_error, nil)
       else
         # No strategy selected - show all draws
-        all_draws = Draws.list_draws(limit: 50)
+        all_draws = Draws.list_draws(limit: 50, game_type: game_id)
 
         socket
         |> assign(:selected_strategy, nil)
@@ -104,6 +112,35 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("game_changed", %{"game_type" => game_id}, socket) do
+    game_id = if Games.supported?(game_id), do: game_id, else: Games.default_id()
+
+    draws = Draws.list_draws(limit: 50, game_type: game_id)
+
+    {draws, pools} =
+      case socket.assigns[:selected_strategy] do
+        nil ->
+          {draws, socket.assigns.strategy_pools}
+
+        strategy ->
+          pools =
+            Generator.get_strategy_pools(strategy,
+              half_random_mode: socket.assigns.half_random_mode,
+              game: game_id
+            )
+
+          {filter_draws_for_strategy(draws, strategy), pools}
+      end
+
+    {:noreply,
+     socket
+     |> assign(:selected_game, game_id)
+     |> assign(:draws, draws)
+     |> assign(:strategy_pools, pools)
+     |> assign(:target_validation_error, nil)}
   end
 
   @impl true
@@ -118,7 +155,12 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     socket =
       if socket.assigns[:selected_strategy] do
         strategy = socket.assigns.selected_strategy
-        pools = Generator.get_strategy_pools(strategy, half_random_mode: half_random_enabled)
+
+        pools =
+          Generator.get_strategy_pools(strategy,
+            half_random_mode: half_random_enabled,
+            game: selected_game(socket)
+          )
 
         socket
         |> assign(:strategy_pools, pools)
@@ -599,10 +641,15 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     target_draw = Draws.get_draw!(params["target_draw_id"])
 
     main_numbers = Enum.join(target_draw.numbers.main_numbers, ", ")
-    euro_numbers = Enum.join(target_draw.numbers.euro_numbers, ", ")
+
+    euro_info =
+      case target_draw.numbers.euro_numbers do
+        [] -> ""
+        euro -> " | #{Enum.join(euro, ", ")}"
+      end
 
     target_info =
-      "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers} | #{euro_numbers}"
+      "Strategia '#{strategy.name}' poszukuje liczb: #{main_numbers}#{euro_info}"
 
     vip1_info = format_vip1_info(simulation.options)
 
@@ -616,7 +663,13 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
   end
 
   defp format_vip1_info(%{"vip1_mode" => true, "vip1_pool" => pool}) when not is_nil(pool) do
-    "\n🎰 Tryb VIP1 aktywny - pula: #{length(pool["main_pool"])} głównych, #{length(pool["euro_pool"])} euro"
+    euro_info =
+      case pool["euro_pool"] do
+        euro when euro in [nil, []] -> ""
+        euro -> ", #{length(euro)} euro"
+      end
+
+    "\n🎰 Tryb VIP1 aktywny - pula: #{length(pool["main_pool"])} głównych#{euro_info}"
   end
 
   defp format_vip1_info(_), do: ""
@@ -731,7 +784,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     user = socket.assigns.current_user
     strategies = if user, do: Strategies.list_strategies(user), else: []
     simulations = if user, do: Simulations.list_simulations(user), else: []
-    draws = Draws.list_draws(limit: 50)
+    draws = Draws.list_draws(limit: 50, game_type: selected_game(socket))
     strategy_pools = build_strategy_pools_map(simulations)
 
     socket
@@ -754,6 +807,10 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     end)
   end
 
+  defp selected_game(socket) do
+    Map.get(socket.assigns, :selected_game) || Games.default_id()
+  end
+
   # Filter draws to show only those that meet strategy constraints
   defp filter_draws_for_strategy(draws, strategy) do
     Enum.filter(draws, fn draw ->
@@ -765,11 +822,16 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     case Generator.validate_strategy_constraints(
            strategy,
            draw.numbers.main_numbers,
-           draw.numbers.euro_numbers
+           draw.numbers.euro_numbers,
+           draw_game_id(draw)
          ) do
       :ok -> true
       {:error, _} -> false
     end
+  end
+
+  defp draw_game_id(draw) do
+    if Games.supported?(draw.game_type), do: draw.game_type, else: Games.default_id()
   end
 
   @doc """
@@ -780,7 +842,12 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
     euro_target = target_draw.numbers.euro_numbers
 
     # First check strategy constraints (even/odd ratio, blacklist, etc.)
-    case Generator.validate_strategy_constraints(strategy, main_target, euro_target) do
+    case Generator.validate_strategy_constraints(
+           strategy,
+           main_target,
+           euro_target,
+           draw_game_id(target_draw)
+         ) do
       {:error, constraint_errors} ->
         {:error, format_constraint_errors(constraint_errors)}
 
@@ -915,6 +982,7 @@ defmodule NumbersEvolutionWeb.SimulationsLive do
           live_prize_tiers={@live_prize_tiers}
           strategy_pools={@strategy_pools}
           selected_strategy={@selected_strategy}
+          selected_game={@selected_game}
           target_validation_error={@target_validation_error}
         />
       </main>

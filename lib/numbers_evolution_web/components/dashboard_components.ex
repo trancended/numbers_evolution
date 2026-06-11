@@ -237,7 +237,10 @@ defmodule NumbersEvolutionWeb.DashboardComponents do
                 size="xs"
               />
             </div>
-            <div class="flex items-center gap-2 text-xs">
+            <div
+              :if={@simulation.target_draw.numbers.euro_numbers != []}
+              class="flex items-center gap-2 text-xs"
+            >
               <.number_ball
                 numbers={@simulation.target_draw.numbers.euro_numbers}
                 type="euro"

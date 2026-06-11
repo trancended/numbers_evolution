@@ -1,38 +1,49 @@
 defmodule NumbersEvolution.Strategies.Generator do
   @moduledoc """
-  Generates Eurojackpot number combinations based on strategy rules.
+  Generates lottery number combinations based on strategy rules.
 
+  Number counts and ranges come from the game configuration
+  (`NumbersEvolution.Games`, default: Eurojackpot 5/50 + 2/12, Lotto 6/49).
   The generator applies strategy rules including:
   - Even/odd ratios
   - Low/high ratios (for main numbers)
   - Preferred hot/cold numbers
   - Weighted pool selection (hot/cold/random)
 
+  Strategy ratios are Eurojackpot-shaped (they sum to 5). For games with a
+  different main-number count (Lotto: 6) the ratios are treated as minimum
+  counts and the extra numbers are unconstrained.
+
   ## VIP1 Mode
 
   VIP1 mode is a special simulation type that:
-  1. Randomly skips 50% of numbers (25 main from 50, 6 euro from 12) before starting
+  1. Randomly skips ~50% of numbers (per-game pool sizes) before starting
   2. Validates that the reduced pool can produce the target 1st prize numbers
-  3. Applies additional constraints: max 2 numbers per decade, 2 odd + 3 even
+  3. Applies additional constraints: max 2 numbers per decade and a per-game
+     odd/even split (Eurojackpot: 2+3, Lotto: 3+3)
   4. Saves the initial pool with the simulation for reproducibility
   """
 
+  alias NumbersEvolution.Games
   alias NumbersEvolution.Strategies.Strategy
 
   @doc """
   Generates a combination of numbers according to strategy rules.
 
-  Returns a map with `:main` (5 numbers from 1-50) and `:euro` (2 numbers from 1-12).
+  Returns a map with `:main` and `:euro` lists sized per the game passed in
+  `opts[:game]` (game id or config, default: Eurojackpot). Games without
+  bonus numbers (Lotto) return `euro: []`.
 
   Validates that:
-  - Main numbers are exactly 5 unique numbers in range 1-50
-  - Euro numbers are exactly 2 unique numbers in range 1-12
+  - Main numbers are unique and within the game's range
+  - Euro numbers are unique and within the game's range (when the game has them)
   - All constraints (even/odd, low/high ratios) are satisfied
   """
   @spec generate_numbers(Strategy.t(), keyword()) ::
           {:ok, %{main: [pos_integer()], euro: [pos_integer()]}}
           | {:error, atom()}
   def generate_numbers(%Strategy{name: name} = strategy, opts \\ []) do
+    game = Games.get!(Keyword.get(opts, :game, Games.default_id()))
     half_random_mode = Keyword.get(opts, :half_random_mode, false)
     vip1_mode = Keyword.get(opts, :vip1_mode, false)
     vip1_pool = Keyword.get(opts, :vip1_pool, nil)
@@ -41,81 +52,101 @@ defmodule NumbersEvolution.Strategies.Generator do
 
     cond do
       vip1_mode and vip1_pool != nil ->
-        generate_vip1_numbers(vip1_pool)
+        generate_vip1_numbers(vip1_pool, game)
 
       vip2_blacklist != nil ->
-        generate_vip2_numbers(strategy, vip2_blacklist)
+        generate_vip2_numbers(strategy, vip2_blacklist, game)
 
       String.contains?(name, "Losowo pomin połowę") or half_random_mode ->
-        generate_half_random_strategy(strategy)
+        generate_half_random_strategy(strategy, game)
 
       true ->
-        generate_numbers_standard(strategy, pools)
+        generate_numbers_standard(strategy, pools, game)
     end
   end
 
   @doc """
   Precomputes hot/cold/random pools for the standard generation path.
 
-  Pools depend only on strategy rules, so simulations can build them once
-  and pass them via `opts[:pools]` to `generate_numbers/2` instead of
-  rebuilding MapSets on every attempt.
+  Pools depend only on strategy rules and the game, so simulations can build
+  them once and pass them via `opts[:pools]` to `generate_numbers/2` instead
+  of rebuilding MapSets on every attempt.
   """
-  @spec build_pools(Strategy.t()) :: %{main: map(), euro: map()}
-  def build_pools(%Strategy{rules: rules}) do
+  @spec build_pools(Strategy.t(), String.t() | map()) :: %{main: map(), euro: map()}
+  def build_pools(%Strategy{rules: rules}, game \\ Games.default_id()) do
+    game = Games.get!(game)
+
     %{
-      main: build_main_pools(rules.main_numbers),
-      euro: build_euro_pools(rules.euro_numbers)
+      main: build_main_pools(rules.main_numbers, game),
+      euro: build_euro_pools(rules.euro_numbers, game)
     }
   end
 
-  defp generate_numbers_standard(%Strategy{rules: rules}, pools) do
-    main_numbers = generate_main_numbers(rules.main_numbers, pools[:main])
-    euro_numbers = generate_euro_numbers(rules.euro_numbers, pools[:euro])
+  defp generate_numbers_standard(%Strategy{rules: rules}, pools, game) do
+    main_numbers = generate_main_numbers(rules.main_numbers, pools[:main], game)
+    euro_numbers = generate_euro_numbers(rules.euro_numbers, pools[:euro], game)
 
     result = %{main: Enum.sort(main_numbers), euro: Enum.sort(euro_numbers)}
 
-    case validate_result(result, rules) do
+    case validate_result(result, rules, game) do
       :ok -> {:ok, result}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  # Special strategy: randomly omit half numbers, then select 3 odd + 2 even with max 2 per decade
-  defp generate_half_random_strategy(_strategy) do
-    with {:ok, main_numbers} <- generate_half_random_main(),
-         {:ok, euro_numbers} <- generate_half_random_euro() do
+  # Special strategy: randomly omit half numbers, then select a per-game odd/even
+  # split with max 2 per decade
+  defp generate_half_random_strategy(_strategy, game) do
+    with {:ok, main_numbers} <- generate_half_random_main(game),
+         {:ok, euro_numbers} <- generate_half_random_euro(game) do
       result = %{main: Enum.sort(main_numbers), euro: Enum.sort(euro_numbers)}
-      validate_half_random_result(result)
+      validate_half_random_result(result, game)
     end
   end
 
   # Generate main numbers for half random strategy
-  defp generate_half_random_main do
-    # Randomly select 25 out of 50
-    all_main = 1..50 |> Enum.to_list()
-    selected_pool = Enum.take_random(all_main, 25)
+  defp generate_half_random_main(game) do
+    %{count: count, min: min, max: max} = game.main
 
-    # Select 3 odd and 2 even, then fill to 5 numbers
-    main_numbers = select_preferred_parity(selected_pool, odd_count: 3, even_count: 2)
-    main_numbers = fill_to_count(main_numbers, selected_pool, 5)
+    # Randomly select half of the numbers (e.g. 25 out of 50)
+    all_main = min..max |> Enum.to_list()
+    selected_pool = Enum.take_random(all_main, game.vip.pool_main)
 
-    # Ensure max 2 per decade and exactly 5 numbers
-    final_numbers = enforce_decade_constraint(Enum.take_random(main_numbers, 5))
+    # Select the per-game odd/even split (historically 3 odd + 2 even for
+    # Eurojackpot), then fill to the full count
+    main_numbers =
+      select_preferred_parity(selected_pool,
+        odd_count: half_random_odd_count(game),
+        even_count: count - half_random_odd_count(game)
+      )
+
+    main_numbers = fill_to_count(main_numbers, selected_pool, count)
+
+    # Ensure max 2 per decade and exactly `count` numbers
+    final_numbers = enforce_decade_constraint(Enum.take_random(main_numbers, count), game)
     {:ok, final_numbers}
   end
 
+  # Eurojackpot's half-random mode predates the game config and always used
+  # 3 odd + 2 even (the inverse of the VIP split); other games use the VIP split
+  defp half_random_odd_count(%{id: "eurojackpot"}), do: 3
+  defp half_random_odd_count(game), do: game.vip.parity_odd
+
   # Generate euro numbers for half random strategy
-  defp generate_half_random_euro do
-    # Randomly select 6 out of 12
-    all_euro = 1..12 |> Enum.to_list()
-    selected_pool = Enum.take_random(all_euro, 6)
+  defp generate_half_random_euro(%{bonus: %{count: 0}}), do: {:ok, []}
 
-    # Select 1 odd and 1 even, then fill to 2 numbers
+  defp generate_half_random_euro(game) do
+    %{count: count, min: min, max: max} = game.bonus
+
+    # Randomly select half of the bonus numbers (e.g. 6 out of 12)
+    all_euro = min..max |> Enum.to_list()
+    selected_pool = Enum.take_random(all_euro, game.vip.pool_bonus)
+
+    # Select 1 odd and 1 even, then fill to the full count
     euro_numbers = select_preferred_parity(selected_pool, odd_count: 1, even_count: 1)
-    euro_numbers = fill_to_count(euro_numbers, selected_pool, 2)
+    euro_numbers = fill_to_count(euro_numbers, selected_pool, count)
 
-    {:ok, Enum.take(euro_numbers, 2)}
+    {:ok, Enum.take(euro_numbers, count)}
   end
 
   # Select specified count of odd and even numbers from pool
@@ -146,20 +177,38 @@ defmodule NumbersEvolution.Strategies.Generator do
   end
 
   # Validate the final result
-  defp validate_half_random_result(result) do
+  defp validate_half_random_result(result, game) do
+    main_count = game.main.count
+    euro_count = game.bonus.count
+
     cond do
-      length(result.main) != 5 -> {:error, :invalid_main_count}
-      length(result.euro) != 2 -> {:error, :invalid_euro_count}
-      not Enum.all?(result.main, &(&1 in 1..50)) -> {:error, :main_out_of_range}
-      not Enum.all?(result.euro, &(&1 in 1..12)) -> {:error, :euro_out_of_range}
-      length(Enum.uniq(result.main)) != 5 -> {:error, :main_duplicates}
-      length(Enum.uniq(result.euro)) != 2 -> {:error, :euro_duplicates}
-      true -> {:ok, result}
+      length(result.main) != main_count ->
+        {:error, :invalid_main_count}
+
+      length(result.euro) != euro_count ->
+        {:error, :invalid_euro_count}
+
+      not Enum.all?(result.main, &(&1 in game.main.min..game.main.max)) ->
+        {:error, :main_out_of_range}
+
+      euro_count > 0 and not Enum.all?(result.euro, &(&1 in game.bonus.min..game.bonus.max)) ->
+        {:error, :euro_out_of_range}
+
+      length(Enum.uniq(result.main)) != main_count ->
+        {:error, :main_duplicates}
+
+      length(Enum.uniq(result.euro)) != euro_count ->
+        {:error, :euro_duplicates}
+
+      true ->
+        {:ok, result}
     end
   end
 
-  # Ensure max 2 numbers per decade (10s, 20s, 30s, 40s, 50s)
-  defp enforce_decade_constraint(numbers) do
+  # Ensure max 2 numbers per decade (10s, 20s, 30s, ...)
+  defp enforce_decade_constraint(numbers, game) do
+    target_count = game.main.count
+
     # Group by decade
     by_decade = Enum.group_by(numbers, fn n -> div(n - 1, 10) end)
 
@@ -169,15 +218,15 @@ defmodule NumbersEvolution.Strategies.Generator do
         Enum.take_random(nums, min(2, length(nums)))
       end)
 
-    # Ensure we have exactly 5 numbers
+    # Ensure we have exactly `target_count` numbers
     case length(constrained) do
-      5 ->
+      ^target_count ->
         constrained
 
-      count when count < 5 ->
+      count when count < target_count ->
         # Fill with numbers from decades that have space
         decades_with_space =
-          0..4
+          0..last_decade(game)
           |> Enum.filter(fn decade ->
             existing = Map.get(by_decade, decade, [])
             length(existing) < 2
@@ -187,48 +236,56 @@ defmodule NumbersEvolution.Strategies.Generator do
           decades_with_space
           |> Enum.flat_map(fn decade ->
             decade_start = decade * 10 + 1
-            decade_end = min((decade + 1) * 10, 50)
+            decade_end = min((decade + 1) * 10, game.main.max)
             decade_range = decade_start..decade_end |> Enum.to_list()
             decade_range -- constrained
           end)
 
-        additional_needed = 5 - count
+        additional_needed = target_count - count
         additional = Enum.take_random(available_numbers, additional_needed)
         constrained ++ additional
 
       _count ->
-        # Too many numbers, take random 5
-        Enum.take_random(constrained, 5)
+        # Too many numbers, take a random subset
+        Enum.take_random(constrained, target_count)
     end
   end
+
+  defp last_decade(game), do: div(game.main.max - 1, 10)
 
   # ============================================================================
   # VIP1 Mode - Special simulation with reduced pool and strict constraints
   # ============================================================================
 
   @doc """
-  Generates a VIP1 pool by randomly selecting 50% of all numbers.
-
-  Returns a map with:
-  - `:main_pool` - 25 randomly selected numbers from 1-50
-  - `:euro_pool` - 6 randomly selected numbers from 1-12
+  Generates a VIP1 pool by randomly selecting ~50% of all numbers
+  (pool sizes come from the game config; Eurojackpot: 25 main + 6 euro,
+  Lotto: 25 main, no euro pool).
 
   ## Example
 
-      iex> {:ok, pool} = generate_vip1_pool()
+      iex> {:ok, pool} = generate_vip1_pool("eurojackpot")
       iex> length(pool.main_pool)
       25
       iex> length(pool.euro_pool)
       6
 
   """
-  @spec generate_vip1_pool() :: {:ok, %{main_pool: [pos_integer()], euro_pool: [pos_integer()]}}
-  def generate_vip1_pool do
-    all_main = 1..50 |> Enum.to_list()
-    all_euro = 1..12 |> Enum.to_list()
+  @spec generate_vip1_pool(String.t() | map()) ::
+          {:ok, %{main_pool: [pos_integer()], euro_pool: [pos_integer()]}}
+  def generate_vip1_pool(game \\ Games.default_id()) do
+    game = Games.get!(game)
 
-    main_pool = Enum.take_random(all_main, 25)
-    euro_pool = Enum.take_random(all_euro, 6)
+    all_main = game.main.min..game.main.max |> Enum.to_list()
+    main_pool = Enum.take_random(all_main, game.vip.pool_main)
+
+    euro_pool =
+      if game.bonus.count > 0 do
+        all_euro = game.bonus.min..game.bonus.max |> Enum.to_list()
+        Enum.take_random(all_euro, game.vip.pool_bonus)
+      else
+        []
+      end
 
     {:ok, %{main_pool: Enum.sort(main_pool), euro_pool: Enum.sort(euro_pool)}}
   end
@@ -286,20 +343,21 @@ defmodule NumbersEvolution.Strategies.Generator do
   with VIP1-like constraints (max 2 per decade, 2 odd + 3 even).
 
   The blacklist is fixed for a whole simulation, so callers running many attempts
-  should precompute the pools once with `prepare_vip2_pools/1` and pass them
+  should precompute the pools once with `prepare_vip2_pools/2` and pass them
   under the `:pools` key of the blacklist map.
   """
-  @spec generate_vip2_numbers(Strategy.t(), map()) ::
+  @spec generate_vip2_numbers(Strategy.t(), map(), String.t() | map()) ::
           {:ok, %{main: [pos_integer()], euro: [pos_integer()], constraints_met: boolean()}}
-  def generate_vip2_numbers(_strategy, blacklist) do
-    pools = Map.get(blacklist, :pools) || prepare_vip2_pools(blacklist)
+  def generate_vip2_numbers(_strategy, blacklist, game \\ Games.default_id()) do
+    game = Games.get!(game)
+    pools = Map.get(blacklist, :pools) || prepare_vip2_pools(blacklist, game)
 
     # Apply VIP1 constraints to main numbers
     {:ok, main_numbers, constraints_met} =
-      generate_vip1_main_from_split(pools.main_odd, pools.main_even, pools.main_available)
+      generate_vip1_main_from_split(pools.main_odd, pools.main_even, pools.main_available, game)
 
     # Generate euro numbers from available pool
-    euro_numbers = Enum.take_random(pools.euro_available, 2)
+    euro_numbers = Enum.take_random(pools.euro_available, game.bonus.count)
 
     {:ok,
      %{
@@ -312,10 +370,18 @@ defmodule NumbersEvolution.Strategies.Generator do
   @doc """
   Precomputes available pools (with parity split) from a VIP2 blacklist.
   """
-  @spec prepare_vip2_pools(%{main_blacklist: list(), euro_blacklist: list()}) :: map()
-  def prepare_vip2_pools(blacklist) do
-    main_available = Enum.reject(1..50, &(&1 in blacklist.main_blacklist))
-    euro_available = Enum.reject(1..12, &(&1 in blacklist.euro_blacklist))
+  @spec prepare_vip2_pools(%{main_blacklist: list(), euro_blacklist: list()}, String.t() | map()) ::
+          map()
+  def prepare_vip2_pools(blacklist, game \\ Games.default_id()) do
+    game = Games.get!(game)
+    main_available = Enum.reject(game.main.min..game.main.max, &(&1 in blacklist.main_blacklist))
+
+    euro_available =
+      if game.bonus.count > 0 do
+        Enum.reject(game.bonus.min..game.bonus.max, &(&1 in blacklist.euro_blacklist))
+      else
+        []
+      end
 
     %{
       main_available: main_available,
@@ -329,9 +395,9 @@ defmodule NumbersEvolution.Strategies.Generator do
   Generates numbers using the VIP1 mode with the given pre-selected pool.
 
   VIP1 constraints:
-  - Max 2 numbers per decade (0-9, 10-19, 20-29, 30-39, 40-50)
-  - Exactly 2 odd + 3 even main numbers
-  - Euro numbers selected from the reduced pool
+  - Max 2 numbers per decade (1-10, 11-20, ...)
+  - Exact per-game odd/even split (Eurojackpot: 2 odd + 3 even, Lotto: 3 + 3)
+  - Euro numbers selected from the reduced pool (when the game has them)
 
   Returns `{:ok, result}` with `:main`, `:euro`, and `:constraints_met` fields,
   or `{:error, reason}` if constraints cannot be satisfied.
@@ -339,13 +405,18 @@ defmodule NumbersEvolution.Strategies.Generator do
   ## Parameters
 
   - `pool` - The VIP1 pool with `:main_pool` and `:euro_pool` lists
+  - `game` - Game id or config (default: Eurojackpot)
 
   """
-  @spec generate_vip1_numbers(map()) ::
+  @spec generate_vip1_numbers(map(), String.t() | map()) ::
           {:ok, %{main: [pos_integer()], euro: [pos_integer()], constraints_met: boolean()}}
-  def generate_vip1_numbers(pool) do
-    {:ok, main_numbers, constraints_met} = generate_vip1_main_with_constraints(pool.main_pool)
-    euro_numbers = Enum.take_random(pool.euro_pool, 2)
+  def generate_vip1_numbers(pool, game \\ Games.default_id()) do
+    game = Games.get!(game)
+
+    {:ok, main_numbers, constraints_met} =
+      generate_vip1_main_with_constraints(pool.main_pool, game)
+
+    euro_numbers = Enum.take_random(pool.euro_pool, game.bonus.count)
 
     {:ok,
      %{
@@ -355,49 +426,55 @@ defmodule NumbersEvolution.Strategies.Generator do
      }}
   end
 
-  # Generate main numbers with VIP1 constraints: 2 odd + 3 even, max 2 per decade
-  defp generate_vip1_main_with_constraints(main_pool) do
+  # Generate main numbers with VIP1 constraints: per-game odd/even split, max 2 per decade
+  defp generate_vip1_main_with_constraints(main_pool, game) do
     # Separate odd and even numbers
     odd_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 1))
     even_numbers = Enum.filter(main_pool, &(rem(&1, 2) == 0))
 
-    generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool)
+    generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool, game)
   end
 
-  defp generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool) do
-    # Try to select exactly 2 odd and 3 even
-    selected_odd = Enum.take_random(odd_numbers, min(2, length(odd_numbers)))
-    selected_even = Enum.take_random(even_numbers, min(3, length(even_numbers)))
+  defp generate_vip1_main_from_split(odd_numbers, even_numbers, main_pool, game) do
+    %{parity_odd: odd_target, parity_even: even_target} = game.vip
+    count = game.main.count
+
+    # Try to select the exact odd/even split
+    selected_odd = Enum.take_random(odd_numbers, min(odd_target, length(odd_numbers)))
+    selected_even = Enum.take_random(even_numbers, min(even_target, length(even_numbers)))
 
     initial_selection = selected_odd ++ selected_even
 
     # Check if we got the right parity ratio
-    parity_ok = length(selected_odd) == 2 and length(selected_even) == 3
+    parity_ok = length(selected_odd) == odd_target and length(selected_even) == even_target
 
-    # Fill to 5 if needed
+    # Fill to the full count if needed
     selection =
-      if length(initial_selection) < 5 do
+      if length(initial_selection) < count do
         remaining_pool = main_pool -- initial_selection
-        additional = Enum.take_random(remaining_pool, 5 - length(initial_selection))
+        additional = Enum.take_random(remaining_pool, count - length(initial_selection))
         initial_selection ++ additional
       else
         initial_selection
       end
 
     # Apply decade constraint
-    final_selection = enforce_vip1_decade_constraint(selection, main_pool)
+    final_selection = enforce_vip1_decade_constraint(selection, main_pool, game)
 
     # Check final constraints
     final_odd = Enum.count(final_selection, &(rem(&1, 2) == 1))
     final_even = Enum.count(final_selection, &(rem(&1, 2) == 0))
     decade_ok = check_decade_constraint(final_selection)
-    constraints_met = parity_ok and final_odd == 2 and final_even == 3 and decade_ok
+
+    constraints_met =
+      parity_ok and final_odd == odd_target and final_even == even_target and decade_ok
 
     {:ok, final_selection, constraints_met}
   end
 
   # Enforce max 2 per decade for VIP1, using only numbers from the pool
-  defp enforce_vip1_decade_constraint(numbers, pool) do
+  defp enforce_vip1_decade_constraint(numbers, pool, game) do
+    count = game.main.count
     by_decade = Enum.group_by(numbers, fn n -> div(n - 1, 10) end)
 
     # First, keep max 2 per decade from selected
@@ -407,10 +484,10 @@ defmodule NumbersEvolution.Strategies.Generator do
       end)
 
     # If we need more numbers, fill from pool respecting decade limits
-    if length(constrained) < 5 do
-      fill_vip1_decade_constraint(constrained, pool, 5)
+    if length(constrained) < count do
+      fill_vip1_decade_constraint(constrained, pool, count)
     else
-      Enum.take(constrained, 5)
+      Enum.take(constrained, count)
     end
   end
 
@@ -448,14 +525,16 @@ defmodule NumbersEvolution.Strategies.Generator do
   end
 
   @doc """
-  Validates if target numbers meet VIP constraints (2 odd + 3 even, max 2 per decade).
+  Validates if target numbers meet VIP constraints (per-game odd/even split,
+  max 2 per decade).
 
   Returns `:ok` if valid, or `{:error, reasons}` with list of violated constraints.
   """
-  @spec validate_vip_constraints(list(), list()) :: :ok | {:error, list()}
-  def validate_vip_constraints(target_main, _target_euro) do
-    parity_errors = check_vip_parity_constraint(target_main)
-    decade_errors = check_vip_decade_constraint(target_main)
+  @spec validate_vip_constraints(list(), list(), String.t() | map()) :: :ok | {:error, list()}
+  def validate_vip_constraints(target_main, _target_euro, game \\ Games.default_id()) do
+    game = Games.get!(game)
+    parity_errors = check_vip_parity_constraint(target_main, game)
+    decade_errors = check_vip_decade_constraint(target_main, game)
 
     errors = parity_errors ++ decade_errors
 
@@ -466,26 +545,27 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
-  defp check_vip_parity_constraint(target_main) do
+  defp check_vip_parity_constraint(target_main, game) do
+    %{parity_odd: odd_target, parity_even: even_target} = game.vip
     odd_count = Enum.count(target_main, &(rem(&1, 2) == 1))
     even_count = Enum.count(target_main, &(rem(&1, 2) == 0))
 
-    if odd_count != 2 or even_count != 3 do
+    if odd_count != odd_target or even_count != even_target do
       [
-        "Poszukiwane liczby główne muszą mieć 2 nieparzyste i 3 parzyste (masz: #{odd_count} niep., #{even_count} parz.)"
+        "Poszukiwane liczby główne muszą mieć #{odd_target} nieparzyste i #{even_target} parzyste (masz: #{odd_count} niep., #{even_count} parz.)"
       ]
     else
       []
     end
   end
 
-  defp check_vip_decade_constraint(target_main) do
+  defp check_vip_decade_constraint(target_main, game) do
     by_decade = Enum.group_by(target_main, fn n -> div(n - 1, 10) end)
 
     violations =
       Enum.filter(by_decade, fn {_decade, nums} -> length(nums) > 2 end)
       |> Enum.map(fn {decade, nums} ->
-        decade_range = format_decade_range(decade)
+        decade_range = format_decade_range(decade, game)
         "Dziesiątka #{decade_range}: #{length(nums)} liczb #{inspect(nums)}"
       end)
 
@@ -496,11 +576,9 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
-  defp format_decade_range(0), do: "1-10"
-  defp format_decade_range(1), do: "11-20"
-  defp format_decade_range(2), do: "21-30"
-  defp format_decade_range(3), do: "31-40"
-  defp format_decade_range(4), do: "41-50"
+  defp format_decade_range(decade, game) do
+    "#{decade * 10 + 1}-#{min((decade + 1) * 10, game.main.max)}"
+  end
 
   @doc """
   Validates if target numbers can be generated by a strategy based on its rules.
@@ -515,13 +593,18 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   Returns `:ok` if valid, or `{:error, reasons}` with list of violated constraints.
   """
-  @spec validate_strategy_constraints(Strategy.t(), list(), list()) ::
+  @spec validate_strategy_constraints(Strategy.t(), list(), list(), String.t() | map()) ::
           :ok | {:error, list()}
-  def validate_strategy_constraints(%Strategy{rules: rules, name: name}, target_main, target_euro) do
+  def validate_strategy_constraints(
+        %Strategy{rules: rules, name: name},
+        target_main,
+        target_euro,
+        game \\ Games.default_id()
+      ) do
     # First check if this is a VIP strategy - apply VIP constraints
     vip_errors =
       if vip_strategy?(name) do
-        case validate_vip_constraints(target_main, target_euro) do
+        case validate_vip_constraints(target_main, target_euro, game) do
           :ok -> []
           {:error, errors} -> errors
         end
@@ -603,21 +686,29 @@ defmodule NumbersEvolution.Strategies.Generator do
   @doc """
   Returns information about VIP1 mode constraints for display.
   """
-  @spec vip1_constraints_info() :: map()
-  def vip1_constraints_info do
+  @spec vip1_constraints_info(String.t() | map()) :: map()
+  def vip1_constraints_info(game \\ Games.default_id()) do
+    game = Games.get!(game)
+
     %{
-      pool_size: %{main: 25, euro: 6, main_total: 50, euro_total: 12},
-      parity: %{odd: 2, even: 3},
+      pool_size: %{
+        main: game.vip.pool_main,
+        euro: game.vip.pool_bonus,
+        main_total: game.main.max,
+        euro_total: game.bonus.max
+      },
+      parity: %{odd: game.vip.parity_odd, even: game.vip.parity_even},
       decade_limit: 2,
       description:
-        "VIP1: Losowo pomiń 50% liczb (25 głównych, 6 euro), następnie losuj 2 nieparzyste + 3 parzyste, max 2 w dziesiątce"
+        "VIP1: Losowo pomiń 50% liczb (#{game.vip.pool_main} głównych#{if game.bonus.count > 0, do: ", #{game.vip.pool_bonus} euro", else: ""}), " <>
+          "następnie losuj #{game.vip.parity_odd} nieparzyste + #{game.vip.parity_even} parzyste, max 2 w dziesiątce"
     }
   end
 
   @doc """
   Returns strategy pool details showing which numbers are in hot/cold/random pools.
 
-  When half_random_mode is true, returns reduced pools (25 main numbers, 6 euro numbers).
+  When half_random_mode is true, returns reduced pools (~half of each range).
 
   Returns a map with `:main_numbers` and `:euro_numbers` pools.
   """
@@ -626,27 +717,33 @@ defmodule NumbersEvolution.Strategies.Generator do
           euro_numbers: %{hot: [integer()], random: [integer()]}
         }
   def get_strategy_pools(%Strategy{rules: rules}, opts \\ []) do
+    game = Games.get!(Keyword.get(opts, :game, Games.default_id()))
     half_random_mode = Keyword.get(opts, :half_random_mode, false)
 
     if half_random_mode do
-      get_half_random_strategy_pools(rules)
+      get_half_random_strategy_pools(rules, game)
     else
       %{
-        main_numbers: build_main_pools(rules.main_numbers),
-        euro_numbers: build_euro_pools(rules.euro_numbers)
+        main_numbers: build_main_pools(rules.main_numbers, game),
+        euro_numbers: build_euro_pools(rules.euro_numbers, game)
       }
     end
   end
 
   # Get pools for half_random mode - reduced pools
-  defp get_half_random_strategy_pools(rules) do
-    # Main numbers: randomly select 25 out of 50
-    all_main = 1..50 |> Enum.to_list()
-    selected_main_pool = Enum.take_random(all_main, 25)
+  defp get_half_random_strategy_pools(rules, game) do
+    # Main numbers: randomly select about half of the range
+    all_main = game.main.min..game.main.max |> Enum.to_list()
+    selected_main_pool = Enum.take_random(all_main, game.vip.pool_main)
 
-    # Euro numbers: randomly select 6 out of 12
-    all_euro = 1..12 |> Enum.to_list()
-    selected_euro_pool = Enum.take_random(all_euro, 6)
+    # Euro numbers: randomly select about half of the range (when present)
+    selected_euro_pool =
+      if game.bonus.count > 0 do
+        all_euro = game.bonus.min..game.bonus.max |> Enum.to_list()
+        Enum.take_random(all_euro, game.vip.pool_bonus)
+      else
+        []
+      end
 
     # Build pools from the reduced sets
     main_pools = build_main_pools_from_reduced(rules.main_numbers, selected_main_pool)
@@ -684,26 +781,33 @@ defmodule NumbersEvolution.Strategies.Generator do
     }
   end
 
-  ## Main Numbers (5 from 1-50)
+  ## Main Numbers (count and range per game)
 
-  defp generate_main_numbers(main_rules, precomputed_pools) do
-    pools = precomputed_pools || build_main_pools(main_rules)
+  defp generate_main_numbers(main_rules, precomputed_pools, game) do
+    pools = precomputed_pools || build_main_pools(main_rules, game)
     [even_count, odd_count] = main_rules.ratio_even_odd
     [low_count, high_count] = main_rules.ratio_low_high
     weights_map = weights_to_map(main_rules.weights, [:hot, :cold, :random])
 
-    generate_with_constraints(pools, weights_map, 5, %{
+    generate_with_constraints(pools, weights_map, game.main.count, %{
       even: even_count,
       odd: odd_count,
       low: low_count,
-      high: high_count
+      high: high_count,
+      low_max: game.main.low_max,
+      count: game.main.count,
+      range: game.main.min..game.main.max
     })
   end
 
-  defp build_main_pools(main_rules) do
-    all_numbers = MapSet.new(1..50)
+  defp build_main_pools(main_rules, game) do
+    all_numbers = MapSet.new(game.main.min..game.main.max)
     blacklist_set = MapSet.new(main_rules.blacklist || [])
-    available_numbers = MapSet.difference(all_numbers, blacklist_set)
+
+    available_numbers =
+      all_numbers
+      |> MapSet.difference(blacklist_set)
+      |> apply_hard_exclusions(main_rules, game)
 
     hot_set = MapSet.new(main_rules.preferred_hot || []) |> MapSet.intersection(available_numbers)
 
@@ -718,6 +822,30 @@ defmodule NumbersEvolution.Strategies.Generator do
       random: MapSet.to_list(random_set)
     }
   end
+
+  # In minimum-ratio mode (rules cover fewer numbers than the game's main
+  # count, e.g. Eurojackpot-shaped rules used for Lotto) the extra numbers are
+  # unconstrained, so a 0-target ratio ("only odd", "only low") must be
+  # enforced structurally by removing the excluded numbers from the pool.
+  defp apply_hard_exclusions(available_numbers, main_rules, game) do
+    [even_target, odd_target] = main_rules.ratio_even_odd
+    [low_target, high_target] = main_rules.ratio_low_high
+
+    if even_target + odd_target == game.main.count do
+      available_numbers
+    else
+      low_max = game.main.low_max
+
+      available_numbers
+      |> reject_when(even_target == 0, &(rem(&1, 2) == 0))
+      |> reject_when(odd_target == 0, &(rem(&1, 2) == 1))
+      |> reject_when(low_target == 0, &(&1 <= low_max))
+      |> reject_when(high_target == 0, &(&1 > low_max))
+    end
+  end
+
+  defp reject_when(set, false, _fun), do: set
+  defp reject_when(set, true, fun), do: set |> Enum.reject(fun) |> MapSet.new()
 
   defp generate_with_constraints(pools, weights, count, constraints) do
     do_generate_with_constraints(pools, weights, [], count, constraints, 0)
@@ -774,21 +902,24 @@ defmodule NumbersEvolution.Strategies.Generator do
     odd_needed = constraints.odd
     low_needed = constraints.low
     high_needed = constraints.high
+    range = constraints.range
+    low_max = constraints.low_max
+    count = constraints.count
 
     result = []
-    result = add_numbers_by_constraint(result, even_needed, &(rem(&1, 2) == 0), 1..50)
-    result = add_numbers_by_constraint(result, odd_needed, &(rem(&1, 2) == 1), 1..50)
-    result = add_numbers_by_constraint(result, low_needed, &(&1 <= 25), 1..50)
-    result = add_numbers_by_constraint(result, high_needed, &(&1 > 25), 1..50)
+    result = add_numbers_by_constraint(result, even_needed, &(rem(&1, 2) == 0), range)
+    result = add_numbers_by_constraint(result, odd_needed, &(rem(&1, 2) == 1), range)
+    result = add_numbers_by_constraint(result, low_needed, &(&1 <= low_max), range)
+    result = add_numbers_by_constraint(result, high_needed, &(&1 > low_max), range)
 
     # Fill remaining slots with random numbers
-    remaining = 5 - length(result)
+    remaining = count - length(result)
 
     if remaining > 0 do
-      available = 1..50 |> Enum.reject(&(&1 in result))
+      available = range |> Enum.reject(&(&1 in result))
       result ++ Enum.take_random(available, remaining)
     else
-      Enum.take(result, 5)
+      Enum.take(result, count)
     end
   end
 
@@ -826,8 +957,8 @@ defmodule NumbersEvolution.Strategies.Generator do
   end
 
   defp satisfies_low_high(num, constraints) do
-    low_satisfies = constraints.low > 0 && num <= 25
-    high_satisfies = constraints.high > 0 && num > 25
+    low_satisfies = constraints.low > 0 && num <= constraints.low_max
+    high_satisfies = constraints.high > 0 && num > constraints.low_max
     no_low_high_constraint = constraints.low == 0 && constraints.high == 0
 
     low_satisfies || high_satisfies || no_low_high_constraint
@@ -865,7 +996,7 @@ defmodule NumbersEvolution.Strategies.Generator do
   end
 
   defp update_if_low_high(constraints, number) do
-    if number <= 25 do
+    if number <= constraints.low_max do
       %{constraints | low: max(0, constraints.low - 1)}
     else
       %{constraints | high: max(0, constraints.high - 1)}
@@ -895,21 +1026,27 @@ defmodule NumbersEvolution.Strategies.Generator do
     end)
   end
 
-  ## Euro Numbers (2 from 1-12)
+  ## Euro Numbers (count and range per game; games without bonus numbers return [])
 
-  defp generate_euro_numbers(euro_rules, precomputed_pools) do
-    pools = precomputed_pools || build_euro_pools(euro_rules)
+  defp generate_euro_numbers(_euro_rules, _precomputed_pools, %{bonus: %{count: 0}}), do: []
+
+  defp generate_euro_numbers(euro_rules, precomputed_pools, game) do
+    pools = precomputed_pools || build_euro_pools(euro_rules, game)
     [even_count, odd_count] = euro_rules.ratio_even_odd
     weights_map = weights_to_map(euro_rules.weights, [:hot, :random])
 
-    generate_euro_with_constraints(pools, weights_map, 2, %{
+    generate_euro_with_constraints(pools, weights_map, game.bonus.count, %{
       even: even_count,
-      odd: odd_count
+      odd: odd_count,
+      count: game.bonus.count,
+      range: game.bonus.min..game.bonus.max
     })
   end
 
-  defp build_euro_pools(euro_rules) do
-    all_numbers = MapSet.new(1..12)
+  defp build_euro_pools(_euro_rules, %{bonus: %{count: 0}}), do: %{hot: [], random: []}
+
+  defp build_euro_pools(euro_rules, game) do
+    all_numbers = MapSet.new(game.bonus.min..game.bonus.max)
     blacklist_set = MapSet.new(euro_rules.blacklist || [])
     available_numbers = MapSet.difference(all_numbers, blacklist_set)
 
@@ -987,19 +1124,21 @@ defmodule NumbersEvolution.Strategies.Generator do
   defp generate_euro_fallback_numbers(constraints) do
     even_needed = constraints.even
     odd_needed = constraints.odd
+    range = constraints.range
+    count = constraints.count
 
     result = []
-    result = add_numbers_by_constraint(result, even_needed, &(rem(&1, 2) == 0), 1..12)
-    result = add_numbers_by_constraint(result, odd_needed, &(rem(&1, 2) == 1), 1..12)
+    result = add_numbers_by_constraint(result, even_needed, &(rem(&1, 2) == 0), range)
+    result = add_numbers_by_constraint(result, odd_needed, &(rem(&1, 2) == 1), range)
 
     # Fill remaining slots
-    remaining = 2 - length(result)
+    remaining = count - length(result)
 
     if remaining > 0 do
-      available = 1..12 |> Enum.reject(&(&1 in result))
+      available = range |> Enum.reject(&(&1 in result))
       result ++ Enum.take_random(available, remaining)
     else
-      Enum.take(result, 2)
+      Enum.take(result, count)
     end
   end
 
@@ -1033,27 +1172,29 @@ defmodule NumbersEvolution.Strategies.Generator do
 
   ## Validation
 
-  defp validate_result(%{main: main, euro: euro}, rules) do
-    with :ok <- validate_main_numbers(main, rules.main_numbers),
-         :ok <- validate_euro_numbers(euro, rules.euro_numbers) do
+  defp validate_result(%{main: main, euro: euro}, rules, game) do
+    with :ok <- validate_main_numbers(main, rules.main_numbers, game),
+         :ok <- validate_euro_numbers(euro, rules.euro_numbers, game) do
       :ok
     else
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp validate_main_numbers(numbers, main_rules) do
+  defp validate_main_numbers(numbers, main_rules, game) do
+    count = game.main.count
+
     cond do
-      length(numbers) != 5 ->
+      length(numbers) != count ->
         {:error, :invalid_count}
 
-      not Enum.all?(numbers, &(&1 in 1..50)) ->
+      not Enum.all?(numbers, &(&1 in game.main.min..game.main.max)) ->
         {:error, :out_of_range}
 
-      length(Enum.uniq(numbers)) != 5 ->
+      length(Enum.uniq(numbers)) != count ->
         {:error, :duplicates}
 
-      not validate_ratios(numbers, main_rules) ->
+      not validate_ratios(numbers, main_rules, game) ->
         {:error, :constraints_not_satisfied}
 
       true ->
@@ -1061,15 +1202,21 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
-  defp validate_euro_numbers(numbers, euro_rules) do
+  defp validate_euro_numbers(numbers, _euro_rules, %{bonus: %{count: 0}}) do
+    if numbers == [], do: :ok, else: {:error, :invalid_count}
+  end
+
+  defp validate_euro_numbers(numbers, euro_rules, game) do
+    count = game.bonus.count
+
     cond do
-      length(numbers) != 2 ->
+      length(numbers) != count ->
         {:error, :invalid_count}
 
-      not Enum.all?(numbers, &(&1 in 1..12)) ->
+      not Enum.all?(numbers, &(&1 in game.bonus.min..game.bonus.max)) ->
         {:error, :out_of_range}
 
-      length(Enum.uniq(numbers)) != 2 ->
+      length(Enum.uniq(numbers)) != count ->
         {:error, :duplicates}
 
       not validate_euro_ratios(numbers, euro_rules) ->
@@ -1080,20 +1227,36 @@ defmodule NumbersEvolution.Strategies.Generator do
     end
   end
 
-  defp validate_ratios(numbers, main_rules) do
+  # Strategy ratios are Eurojackpot-shaped (sum to 5). When they cover the
+  # game's full main count they are exact targets; otherwise (Lotto: 6 numbers)
+  # they act as minimum counts and the extra numbers are unconstrained.
+  defp validate_ratios(numbers, main_rules, game) do
     [even_target, odd_target] = main_rules.ratio_even_odd
     [low_target, high_target] = main_rules.ratio_low_high
+    exact? = even_target + odd_target == game.main.count
 
     even_count = Enum.count(numbers, &(rem(&1, 2) == 0))
     odd_count = Enum.count(numbers, &(rem(&1, 2) == 1))
-    low_count = Enum.count(numbers, &(&1 <= 25))
-    high_count = Enum.count(numbers, &(&1 > 25))
+    low_count = Enum.count(numbers, &(&1 <= game.main.low_max))
+    high_count = Enum.count(numbers, &(&1 > game.main.low_max))
 
-    even_count == even_target &&
-      odd_count == odd_target &&
-      low_count == low_target &&
-      high_count == high_target
+    if exact? do
+      even_count == even_target &&
+        odd_count == odd_target &&
+        low_count == low_target &&
+        high_count == high_target
+    else
+      minimum_ok?(even_count, even_target) &&
+        minimum_ok?(odd_count, odd_target) &&
+        minimum_ok?(low_count, low_target) &&
+        minimum_ok?(high_count, high_target)
+    end
   end
+
+  # A 0-target in minimum mode is a hard exclusion ("only odd" etc.),
+  # matching the pool filtering in apply_hard_exclusions/3
+  defp minimum_ok?(count, 0), do: count == 0
+  defp minimum_ok?(count, target), do: count >= target
 
   defp validate_euro_ratios(numbers, euro_rules) do
     [even_target, odd_target] = euro_rules.ratio_even_odd

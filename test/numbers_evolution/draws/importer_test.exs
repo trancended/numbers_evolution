@@ -76,4 +76,68 @@ defmodule NumbersEvolution.Draws.ImporterTest do
 
     assert {:error, :timeout} = Importer.import_latest()
   end
+
+  describe "lotto" do
+    defp lotto_api_response(date \\ ~D[2026-06-09]) do
+      %{
+        "last" => %{
+          "date" => %{"year" => date.year, "month" => date.month, "day" => date.day},
+          "numbers" => [41, 2, 24, 30, 4, 39],
+          "polishLottoPlus" => %{"numbers" => [10, 12, 16, 17, 19, 28]}
+        }
+      }
+    end
+
+    test "imports the latest lotto draw with sorted numbers and no euro numbers" do
+      expect(HTTPClientMock, :get, fn url, _opts ->
+        assert url =~ "polishLotto"
+        {:ok, %{status: 200, body: lotto_api_response()}}
+      end)
+
+      assert {:ok, :imported, draw} = Importer.import_latest("lotto")
+      assert draw.draw_date == ~D[2026-06-09]
+      assert draw.game_type == "lotto"
+      assert draw.source == "import"
+      assert draw.numbers.main_numbers == [2, 4, 24, 30, 39, 41]
+      assert draw.numbers.euro_numbers == []
+    end
+
+    test "second lotto import of the same draw is idempotent" do
+      expect(HTTPClientMock, :get, 2, fn _url, _opts ->
+        {:ok, %{status: 200, body: lotto_api_response()}}
+      end)
+
+      assert {:ok, :imported, _draw} = Importer.import_latest("lotto")
+      assert {:ok, :already_exists} = Importer.import_latest("lotto")
+
+      draws = Draws.list_draws(game_type: "lotto")
+      assert length(draws) == 1
+    end
+
+    test "lotto and eurojackpot draws on the same date can coexist" do
+      expect(HTTPClientMock, :get, fn _url, _opts ->
+        {:ok, %{status: 200, body: api_response()}}
+      end)
+
+      expect(HTTPClientMock, :get, fn _url, _opts ->
+        {:ok, %{status: 200, body: lotto_api_response()}}
+      end)
+
+      expect(HTTPClientMock, :get, fn _url, _opts ->
+        {:ok, %{status: 200, body: api_response()}}
+      end)
+
+      assert {:ok, :imported, _draw} = Importer.import_latest()
+      assert {:ok, :imported, _draw} = Importer.import_latest("lotto")
+      assert {:ok, :already_exists} = Importer.import_latest()
+    end
+
+    test "returns error when lotto payload has wrong number count" do
+      expect(HTTPClientMock, :get, fn _url, _opts ->
+        {:ok, %{status: 200, body: api_response()}}
+      end)
+
+      assert {:error, :unexpected_payload} = Importer.import_latest("lotto")
+    end
+  end
 end

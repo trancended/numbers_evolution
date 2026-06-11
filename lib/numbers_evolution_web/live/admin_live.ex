@@ -4,7 +4,7 @@ defmodule NumbersEvolutionWeb.AdminLive do
   """
   use NumbersEvolutionWeb, :live_view
 
-  alias NumbersEvolution.{Accounts, Draws, Repo, Simulations, Strategies}
+  alias NumbersEvolution.{Accounts, Draws, Games, Repo, Simulations, Strategies}
 
   import Ecto.Query
 
@@ -55,19 +55,23 @@ defmodule NumbersEvolutionWeb.AdminLive do
   end
 
   @impl true
-  def handle_event("import_draws", _params, socket) do
+  def handle_event("import_draws", params, socket) do
+    game_id = Map.get(params, "game", Games.default_id())
+    game_id = if Games.supported?(game_id), do: game_id, else: Games.default_id()
+    game_label = Games.label(game_id)
+
     socket =
-      case Draws.Importer.import_latest() do
+      case Draws.Importer.import_latest(game_id) do
         {:ok, :imported, draw} ->
           socket
-          |> put_flash(:info, "Zaimportowano losowanie z #{draw.draw_date}")
-          |> assign(:latest_draw, draw)
+          |> put_flash(:info, "Zaimportowano losowanie #{game_label} z #{draw.draw_date}")
+          |> assign(:latest_draws, load_latest_draws())
 
         {:ok, :already_exists} ->
-          put_flash(socket, :info, "Najnowsze losowanie jest już w bazie")
+          put_flash(socket, :info, "Najnowsze losowanie #{game_label} jest już w bazie")
 
         {:error, reason} ->
-          put_flash(socket, :error, "Import nie powiódł się: #{inspect(reason)}")
+          put_flash(socket, :error, "Import #{game_label} nie powiódł się: #{inspect(reason)}")
       end
 
     {:noreply, socket}
@@ -93,7 +97,13 @@ defmodule NumbersEvolutionWeb.AdminLive do
     |> assign(:users, users)
     |> assign(:user_stats, user_stats)
     |> assign(:recent_activities, recent_activities)
-    |> assign(:latest_draw, Draws.get_latest_draw("eurojackpot"))
+    |> assign(:latest_draws, load_latest_draws())
+  end
+
+  defp load_latest_draws do
+    Enum.map(Games.importable(), fn game ->
+      {game, Draws.get_latest_draw(game.id)}
+    end)
   end
 
   defp get_recent_activities do
@@ -193,29 +203,39 @@ defmodule NumbersEvolutionWeb.AdminLive do
           <%!-- Draw Data --%>
           <.card>
             <:title>Dane losowań</:title>
-            <div class="flex flex-col md:flex-row md:items-center gap-4">
-              <div class="flex-1">
-                <%= if @latest_draw do %>
-                  <div class="text-sm text-base-content/70">
-                    Ostatnie losowanie w bazie:
-                    <span class="font-semibold">{@latest_draw.draw_date}</span>
+            <div class="space-y-3">
+              <%= for {game, latest_draw} <- @latest_draws do %>
+                <div class="flex flex-col md:flex-row md:items-center gap-4">
+                  <div class="flex-1">
+                    <%= if latest_draw do %>
+                      <div class="text-sm text-base-content/70">
+                        Ostatnie losowanie {game.label} w bazie:
+                        <span class="font-semibold">{latest_draw.draw_date}</span>
+                      </div>
+                      <div class="font-mono text-sm mt-1">
+                        {Enum.join(latest_draw.numbers.main_numbers, ", ")}
+                        <span :if={latest_draw.numbers.euro_numbers != []} class="text-warning">
+                          + {Enum.join(latest_draw.numbers.euro_numbers, ", ")}
+                        </span>
+                      </div>
+                    <% else %>
+                      <div class="text-sm text-base-content/70">
+                        Brak losowań {game.label} w bazie
+                      </div>
+                    <% end %>
                   </div>
-                  <div class="font-mono text-sm mt-1">
-                    {Enum.join(@latest_draw.numbers.main_numbers, ", ")}
-                    <span class="text-warning">
-                      + {Enum.join(@latest_draw.numbers.euro_numbers, ", ")}
-                    </span>
-                  </div>
-                <% else %>
-                  <div class="text-sm text-base-content/70">Brak losowań w bazie</div>
-                <% end %>
-              </div>
-              <button phx-click="import_draws" class="btn btn-primary btn-sm">
-                <.icon name="hero-arrow-down-tray" class="size-4" /> Importuj najnowsze losowanie
-              </button>
+                  <button
+                    phx-click="import_draws"
+                    phx-value-game={game.id}
+                    class="btn btn-primary btn-sm"
+                  >
+                    <.icon name="hero-arrow-down-tray" class="size-4" /> Importuj {game.label}
+                  </button>
+                </div>
+              <% end %>
             </div>
             <p class="text-xs text-base-content/60 mt-2">
-              Pobiera najnowszy wynik Eurojackpot z publicznego API (Lottoland).
+              Pobiera najnowsze wyniki z publicznego API (Lottoland).
               Ponowny import tego samego losowania jest pomijany. Dostępne też jako <code class="font-mono">mix import.draws</code>.
             </p>
           </.card>
