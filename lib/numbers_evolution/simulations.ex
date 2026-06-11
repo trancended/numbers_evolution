@@ -46,7 +46,8 @@ defmodule NumbersEvolution.Simulations do
       :ets.update_counter(table_name, tier, 1)
     end
 
-    def increment_tier(table_name, tier, generated, target) when tier in 1..12 do
+    def increment_tier(table_name, tier, generated, matched_main, matched_euro)
+        when tier in 1..12 do
       :ets.update_counter(table_name, tier, 1)
 
       # Store details for high prize tiers (1-5)
@@ -58,10 +59,6 @@ defmodule NumbersEvolution.Simulations do
             [{^details_key, details}] -> details
             [] -> []
           end
-
-        # Calculate matched numbers
-        matched_main = count_matches_local(generated.main, target.main_numbers)
-        matched_euro = count_matches_local(generated.euro, target.euro_numbers)
 
         new_detail = %{
           main_matched: matched_main,
@@ -113,13 +110,6 @@ defmodule NumbersEvolution.Simulations do
     """
     def delete(table_name) do
       :ets.delete(table_name)
-    end
-
-    # Local implementation of count_matches for PrizeTiersTracker
-    defp count_matches_local(generated_list, target_list) do
-      generated_set = MapSet.new(generated_list)
-      target_set = MapSet.new(target_list)
-      MapSet.intersection(generated_set, target_set) |> MapSet.size()
     end
   end
 
@@ -1224,7 +1214,9 @@ defmodule NumbersEvolution.Simulations do
     )
 
     # Sprawdź wszystkie możliwe stopnie nagród i zlicz je
-    all_tiers = calculate_all_prize_tiers(generated, context.target_numbers)
+    main_matches = count_matches(generated.main, context.target_numbers.main_numbers)
+    euro_matches = count_matches(generated.euro, context.target_numbers.euro_numbers)
+    all_tiers = tiers_for_matches(main_matches, euro_matches)
 
     # Debug log dla jackpota
     if 1 in all_tiers do
@@ -1239,7 +1231,8 @@ defmodule NumbersEvolution.Simulations do
         context.prize_tiers_table,
         tier,
         generated,
-        context.target_numbers
+        main_matches,
+        euro_matches
       )
     end)
 
@@ -1298,13 +1291,21 @@ defmodule NumbersEvolution.Simulations do
     {2, 1} => 12
   }
 
-  # Calculates all prize tiers that match for a given draw.
+  @doc false
+  # Calculates all prize tiers that match for a given draw (public for benchmarks).
   # For example, if someone matches 5+2, they also technically match 5+1, 5+0, 4+2, 4+1, etc.
   # Returns a list of all matching tier numbers.
-  defp calculate_all_prize_tiers(generated, target_numbers) do
+  def calculate_all_prize_tiers(generated, target_numbers) do
     main_matches = count_matches(generated.main, target_numbers.main_numbers)
     euro_matches = count_matches(generated.euro, target_numbers.euro_numbers)
+    tiers_for_matches(main_matches, euro_matches)
+  end
 
+  # No tier exists without at least 1 main match - and a descending 1..0 range
+  # would wrongly count tier 11 (1+2) for a 0-main draw
+  defp tiers_for_matches(0, _euro_matches), do: []
+
+  defp tiers_for_matches(main_matches, euro_matches) do
     # Generate all possible combinations from current matches down to minimum winning combinations
     # Note: euro can be 0 (prizes exist for X+0 combinations)
     for main <- 1..main_matches,
@@ -1313,13 +1314,10 @@ defmodule NumbersEvolution.Simulations do
         tier != nil do
       tier
     end
-    |> Enum.sort()
   end
 
   defp count_matches(generated_list, target_list) do
-    generated_set = MapSet.new(generated_list)
-    target_set = MapSet.new(target_list)
-    MapSet.intersection(generated_set, target_set) |> MapSet.size()
+    Enum.count(generated_list, &(&1 in target_list))
   end
 
   defp broadcast_progress(simulation_id, attempts, start_time, prize_tiers) do
