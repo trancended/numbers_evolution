@@ -5,6 +5,9 @@ defmodule NumbersEvolution.Release do
   """
   @app :numbers_evolution
 
+  alias NumbersEvolution.Draws.Importer
+  alias NumbersEvolution.Games
+
   def migrate do
     load_app()
 
@@ -85,26 +88,29 @@ defmodule NumbersEvolution.Release do
     {:ok, _} = Application.ensure_all_started(:req)
 
     for repo <- repos() do
-      {:ok, _, _} =
-        Ecto.Migrator.with_repo(repo, fn _repo ->
-          Enum.each(NumbersEvolution.Games.importable(), fn game ->
-            IO.puts("Importing #{game.label}...")
+      {:ok, _, _} = Ecto.Migrator.with_repo(repo, fn _repo -> import_all_games() end)
+    end
+  end
 
-            case NumbersEvolution.Draws.Importer.import_latest(game.id) do
-              {:ok, :imported, draw} ->
-                IO.puts("  imported draw #{draw.draw_date}")
+  defp import_all_games do
+    Enum.each(Games.importable(), &import_game/1)
+  end
 
-              {:ok, :already_exists} ->
-                IO.puts("  latest draw already imported")
+  defp import_game(game) do
+    IO.puts("Importing #{game.label}...")
 
-              {:ok, :history_imported, %{imported: imported, total: total}} ->
-                IO.puts("  imported #{imported} archive draws (#{total} total)")
+    case Importer.import_latest(game.id) do
+      {:ok, :imported, draw} ->
+        IO.puts("  imported draw #{draw.draw_date}")
 
-              {:error, reason} ->
-                IO.puts("  import failed: #{inspect(reason)}")
-            end
-          end)
-        end)
+      {:ok, :already_exists} ->
+        IO.puts("  latest draw already imported")
+
+      {:ok, :history_imported, %{imported: imported, total: total}} ->
+        IO.puts("  imported #{imported} archive draws (#{total} total)")
+
+      {:error, reason} ->
+        IO.puts("  import failed: #{inspect(reason)}")
     end
   end
 
