@@ -22,6 +22,8 @@ defmodule NumbersEvolution.Games do
           },
           bonus: %{count: non_neg_integer(), min: non_neg_integer(), max: non_neg_integer()},
           prize_tiers: %{{non_neg_integer(), non_neg_integer()} => pos_integer()},
+          ticket_cost: float(),
+          payouts: %{pos_integer() => number()},
           vip: %{
             pool_main: pos_integer(),
             pool_bonus: non_neg_integer(),
@@ -69,6 +71,24 @@ defmodule NumbersEvolution.Games do
         # XII (2+1)
         {2, 1} => 12
       },
+      # Cena kuponu (PLN) i orientacyjne, uśrednione wypłaty per stopień (PLN).
+      # Wartości są PRZYBLIŻENIEM (pule I-III są zmienne, zależne od losowania) —
+      # służą do szacowania EV/ROI, nie jako gwarancja. Można je nadpisać per gra.
+      ticket_cost: 12.5,
+      payouts: %{
+        1 => 40_000_000,
+        2 => 2_000_000,
+        3 => 200_000,
+        4 => 5_000,
+        5 => 300,
+        6 => 200,
+        7 => 130,
+        8 => 50,
+        9 => 40,
+        10 => 30,
+        11 => 25,
+        12 => 20
+      },
       vip: %{
         pool_main: 25,
         pool_bonus: 6,
@@ -95,6 +115,15 @@ defmodule NumbersEvolution.Games do
         {4, 0} => 3,
         # trójka
         {3, 0} => 4
+      },
+      # Cena kuponu (PLN) i orientacyjne, uśrednione wypłaty per stopień (PLN).
+      # Szóstka jest zmienną kumulacją - podana wartość jest reprezentatywna.
+      ticket_cost: 3.0,
+      payouts: %{
+        1 => 6_000_000,
+        2 => 5_000,
+        3 => 150,
+        4 => 24
       },
       vip: %{
         # ceil(49 / 2) - rounding up keeps the "pool contains target" retry viable
@@ -146,6 +175,14 @@ defmodule NumbersEvolution.Games do
   @doc "Returns true when the game uses bonus (euro) numbers."
   @spec has_bonus?(String.t() | game()) :: boolean()
   def has_bonus?(game), do: get!(game).bonus.count > 0
+
+  @doc "Returns the ticket cost (PLN) for a game."
+  @spec ticket_cost(String.t() | game()) :: float()
+  def ticket_cost(game), do: get!(game).ticket_cost
+
+  @doc "Returns the approximate per-tier payout table (tier number => PLN)."
+  @spec payouts(String.t() | game()) :: %{pos_integer() => number()}
+  def payouts(game), do: get!(game).payouts
 
   @doc "Returns `{label, id}` options for game `<select>` inputs."
   @spec select_options() :: [{String.t(), String.t()}]

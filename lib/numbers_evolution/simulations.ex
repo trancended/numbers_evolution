@@ -11,6 +11,8 @@ defmodule NumbersEvolution.Simulations do
   alias NumbersEvolution.Repo
 
   alias NumbersEvolution.Simulations.{
+    Estimator,
+    GoldenMean,
     Simulation,
     SimulationDuplicateController,
     SimulationResult
@@ -20,6 +22,11 @@ defmodule NumbersEvolution.Simulations do
     @moduledoc """
     ETS-based prize tiers tracker for concurrent prize counting.
     """
+
+    # High-tier example combinations are kept only up to this cap. In small
+    # (VIP2) search spaces tiers like 4+1 hit often, so an uncapped details list
+    # grew unbounded and leaked memory on long runs — 20 examples is plenty.
+    @max_prize_details 20
 
     @doc """
     Creates a new ETS table for prize tiers tracking.
@@ -50,16 +57,22 @@ defmodule NumbersEvolution.Simulations do
         when tier in 1..12 do
       :ets.update_counter(table_name, tier, 1)
 
-      # Store details for high prize tiers (1-5)
+      # Store details for high prize tiers (1-5), capped to avoid unbounded growth
       if tier in 1..5 do
-        details_key = :"#{tier}_details"
+        maybe_store_detail(table_name, tier, generated, matched_main, matched_euro)
+      end
+    end
 
-        current_details =
-          case :ets.lookup(table_name, details_key) do
-            [{^details_key, details}] -> details
-            [] -> []
-          end
+    defp maybe_store_detail(table_name, tier, generated, matched_main, matched_euro) do
+      details_key = :"#{tier}_details"
 
+      current_details =
+        case :ets.lookup(table_name, details_key) do
+          [{^details_key, details}] -> details
+          [] -> []
+        end
+
+      if length(current_details) < @max_prize_details do
         new_detail = %{
           main_matched: matched_main,
           euro_matched: matched_euro,
@@ -135,7 +148,8 @@ defmodule NumbersEvolution.Simulations do
       :pools,
       :thread_count,
       :counter_table,
-      :prize_tiers_table
+      :prize_tiers_table,
+      :seed
     ]
   end
 
@@ -303,6 +317,7 @@ defmodule NumbersEvolution.Simulations do
 
     with {:ok, strategy} <- validate_strategy(user, attrs["strategy_id"]),
          {:ok, target_draw} <- validate_draw(attrs["target_draw_id"]),
+         attrs <- maybe_apply_golden_mean(attrs, target_draw),
          {:ok, attrs_with_pool} <- maybe_generate_vip1_pool(attrs, target_draw, vip1_mode),
          {:ok, attrs_with_vip2} <-
            maybe_generate_vip2_blacklist(attrs_with_pool, strategy, target_draw),
@@ -391,6 +406,37 @@ defmodule NumbersEvolution.Simulations do
         }}}
     else
       {:cont, nil}
+    end
+  end
+
+  @doc """
+  Recommends auto-blacklist sizes so a simulation is expected to hit the target
+  in ~`setpoint` attempts (the "golden mean"). Thin wrapper over
+  `GoldenMean.calibrate/2`; `opts` accepts `:game`, `:euro_blacklist`, `:probe`.
+
+  ## Examples
+
+      iex> rec = recommend_golden_mean(100, game: "eurojackpot")
+      iex> rec.expected_attempts <= 200
+      true
+  """
+  @spec recommend_golden_mean(number(), keyword()) :: GoldenMean.recommendation()
+  def recommend_golden_mean(setpoint, opts \\ []) do
+    GoldenMean.calibrate(setpoint, opts)
+  end
+
+  # When "golden_mean_target" is supplied, self-tune the auto-blacklist size so
+  # the expected attempts land near that target, then feed the sizes into the
+  # existing (look-ahead-safe) auto-blacklist path.
+  defp maybe_apply_golden_mean(attrs, target_draw) do
+    case parse_int(attrs["golden_mean_target"], 0) do
+      target when target > 0 ->
+        game = draw_game(target_draw)
+        rec = GoldenMean.calibrate(target, game: game.id)
+        Map.merge(attrs, GoldenMean.to_options(rec))
+
+      _ ->
+        attrs
     end
   end
 
@@ -885,7 +931,9 @@ defmodule NumbersEvolution.Simulations do
       "vip1_mode" => vip1_mode,
       "thread_count" => thread_count,
       "auto_blacklist" => auto_blacklist,
-      "auto_blacklist_respect_rules" => auto_blacklist_respect_rules
+      "auto_blacklist_respect_rules" => auto_blacklist_respect_rules,
+      # Persisted RNG seed makes single-threaded runs reproducible/auditable
+      "seed" => parse_seed(attrs["seed"])
     }
 
     # Add VIP1 pool if provided
@@ -926,6 +974,12 @@ defmodule NumbersEvolution.Simulations do
   defp parse_boolean("true", _default), do: true
   defp parse_boolean("false", _default), do: false
   defp parse_boolean(_, default), do: default
+
+  # Seed is stored JSONB-friendly as a 3-element list; a fresh one is drawn when
+  # none is supplied so every run is reproducible from its recorded seed.
+  defp parse_seed([a, b, c]) when is_integer(a) and is_integer(b) and is_integer(c), do: [a, b, c]
+
+  defp parse_seed(_), do: for(_ <- 1..3, do: :rand.uniform(1_000_000_000))
 
   defp start_simulation_task(simulation, strategy, target_draw) do
     require Logger
@@ -1012,6 +1066,11 @@ defmodule NumbersEvolution.Simulations do
       options = updated_simulation.options || %{}
       max_attempts = Map.get(options, "max_attempts", 1_000_000)
       timeout_seconds = Map.get(options, "timeout_seconds", 86_400)
+      seed = Map.get(options, "seed")
+
+      # Seed this process's RNG so single-threaded runs are fully reproducible
+      # (parallel tasks reseed independently from this base - see run_attempt_batch)
+      if seed, do: :rand.seed(:exsss, List.to_tuple(seed))
 
       start_time = System.monotonic_time(:second)
 
@@ -1051,7 +1110,8 @@ defmodule NumbersEvolution.Simulations do
         pools: pools,
         thread_count: thread_count,
         counter_table: counter_table,
-        prize_tiers_table: prize_tiers_table
+        prize_tiers_table: prize_tiers_table,
+        seed: seed
       }
 
       result = simulate_until_match(context)
@@ -1063,7 +1123,8 @@ defmodule NumbersEvolution.Simulations do
         start_time,
         strategy,
         duplicate_controller,
-        prize_tiers_table
+        prize_tiers_table,
+        game
       )
     rescue
       e ->
@@ -1182,10 +1243,14 @@ defmodule NumbersEvolution.Simulations do
   @attempt_batch_size 200
 
   defp process_simulation_attempts_parallel(%SimulationContext{} = context) do
-    # Uruchom wiele wątków równolegle do generowania prób
+    # Uruchom wiele wątków równolegle do generowania prób.
+    # Każdy task dostaje niezależny, zdeterminowany strumień RNG wyprowadzony
+    # z ziarna symulacji, więc próby nie są skorelowane między wątkami, a wynik
+    # jest odtwarzalny przy tym samym harmonogramie.
     tasks =
-      Enum.map(1..context.thread_count, fn _thread_id ->
+      Enum.map(1..context.thread_count, fn thread_id ->
         Task.async(fn ->
+          maybe_seed_task(context.seed, thread_id)
           run_attempt_batch(context)
         end)
       end)
@@ -1201,6 +1266,13 @@ defmodule NumbersEvolution.Simulations do
     Enum.reduce_while(1..@attempt_batch_size, :no_match, fn _i, acc ->
       attempt_batch_step(context, acc)
     end)
+  end
+
+  # Derive an independent per-task RNG stream from the base seed and thread index.
+  defp maybe_seed_task(nil, _thread_id), do: :ok
+
+  defp maybe_seed_task([a, b, c], thread_id) do
+    :rand.seed(:exsss, {a + thread_id * 7919, b + thread_id, c + thread_id * 104_729})
   end
 
   defp attempt_batch_step(context, acc) do
@@ -1434,7 +1506,8 @@ defmodule NumbersEvolution.Simulations do
          start_time,
          strategy,
          duplicate_controller,
-         prize_tiers_table
+         prize_tiers_table,
+         game
        ) do
     require Logger
     simulation = Repo.get!(Simulation, simulation_id)
@@ -1465,6 +1538,7 @@ defmodule NumbersEvolution.Simulations do
           "unique_attempts" => attempts,
           "prize_tiers" => prize_tiers,
           "prize_details" => prize_details,
+          "statistics" => build_statistics(prize_tiers_raw, attempts, game),
           "final_draw" => %{
             "main_numbers" => matched_numbers.main,
             "euro_numbers" => matched_numbers.euro
@@ -1497,7 +1571,8 @@ defmodule NumbersEvolution.Simulations do
           "duplicates_skipped" => duplicate_stats.duplicates_skipped,
           "unique_attempts" => attempts,
           "prize_tiers" => prize_tiers,
-          "prize_details" => prize_details
+          "prize_details" => prize_details,
+          "statistics" => build_statistics(prize_tiers_raw, attempts, game)
         }
 
         result_changeset =
@@ -1586,6 +1661,47 @@ defmodule NumbersEvolution.Simulations do
       Enum.at(sorted_list, div(count, 2)) * 1.0
     end
   end
+
+  # Builds JSONB-serializable estimation stats (per-tier rate + Wilson CI, and
+  # estimated attempts to jackpot) from the engine's cumulative tier counts.
+  defp build_statistics(_counts, n, _game) when not (n > 0), do: nil
+
+  defp build_statistics(counts_int, n, game) do
+    jackpot_count = Map.get(counts_int, 1, 0)
+
+    %{
+      "attempts" => n,
+      "tier_stats" => serialize_tier_stats(Estimator.tier_stats_from_counts(counts_int, n, game)),
+      "attempts_to_jackpot" =>
+        serialize_attempts(Estimator.attempts_from_jackpot_count(jackpot_count, n))
+    }
+  end
+
+  defp serialize_tier_stats(tier_stats) do
+    Map.new(tier_stats, fn {tier, s} ->
+      {Integer.to_string(tier),
+       %{
+         "count" => s.count,
+         "rate" => s.rate,
+         "ci_low" => s.ci_low,
+         "ci_high" => s.ci_high
+       }}
+    end)
+  end
+
+  defp serialize_attempts(%{observed: observed, note: note} = a) do
+    %{
+      "point" => finite_number(a.point),
+      "low" => finite_number(a.low),
+      "high" => finite_number(a.high),
+      "observed" => observed,
+      "note" => Atom.to_string(note)
+    }
+  end
+
+  # :infinity and nil are not JSONB-friendly; store them as null.
+  defp finite_number(value) when is_number(value), do: value
+  defp finite_number(_value), do: nil
 
   defp apply_filters(query, opts) do
     query
