@@ -18,7 +18,8 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
           duplicates_skipped: integer() | nil,
           unique_attempts: integer() | nil,
           prize_tiers: map() | nil,
-          prize_details: map() | nil
+          prize_details: map() | nil,
+          statistics: map() | nil
         }
 
   @type final_draw :: %{
@@ -46,6 +47,10 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
     field(:prize_tiers, :map)
     field(:prize_details, :map)
 
+    # Rigorous estimation: per-tier rates + Wilson CIs and estimated attempts
+    # to jackpot (with CI / lower bound). Populated by the Estimator at finalize.
+    field(:statistics, :map)
+
     embeds_one :final_draw, FinalDraw, primary_key: false do
       field(:main_numbers, {:array, :integer})
       field(:euro_numbers, {:array, :integer})
@@ -64,7 +69,8 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
       :duplicates_skipped,
       :unique_attempts,
       :prize_tiers,
-      :prize_details
+      :prize_details,
+      :statistics
     ])
     |> validate_required([:matched_main, :matched_euro, :attempts_count])
     |> cast_embed(:final_draw, required: true, with: &final_draw_changeset/2)
@@ -86,7 +92,8 @@ defmodule NumbersEvolution.Simulations.SimulationResult do
       :duplicates_skipped,
       :unique_attempts,
       :prize_tiers,
-      :prize_details
+      :prize_details,
+      :statistics
     ])
     |> validate_required([:reason, :limit_reached])
     |> validate_inclusion(:reason, ~w(timeout error))
